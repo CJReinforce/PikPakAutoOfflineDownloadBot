@@ -337,7 +337,7 @@ def main(update: Update, context: CallbackContext):
                     for name, url, down_file_id, path in get_folder_all_file(folder_id=file_id, path=f"{down_name}/"):
                         jsonreq = json.dumps({'jsonrpc': '2.0', 'id': 'qwer', 'method': 'aria2.addUri',
                                               'params': [f"token:{the_config['Aria2_secret']}", [url],
-                                                         {"dir": the_config['Aria2_download_path'] + path, "out": f"{name}",
+                                                         {"dir": the_config['Aria2_download_path'] + '/' + path, "out": f"{name}",
                                                           "header": download_headers, "check-certificate": False}]})
 
                         push_flag = False  # 成功推送aria2下载标志
