@@ -589,7 +589,7 @@ def download_main(update: Update, context: CallbackContext, argv: list):
 
                 # 获取所有文件的相关信息，并推送aria2开始下载
                 for name, url, down_file_id, path in get_folder_all_file(folder_id='', path=''):
-                    print(the_config['Aria2_download_path'] + path)
+                    # print(the_config['Aria2_download_path'] + path)
                     jsonreq = json.dumps({'jsonrpc': '2.0', 'id': 'qwer', 'method': 'aria2.addUri',
                                           'params': [f"token:{the_config['Aria2_secret']}", [url],
                                                      {"dir": the_config['Aria2_download_path'] + path, "out": f"{name}",
