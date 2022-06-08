@@ -4,10 +4,10 @@ TOKEN = 'token'
 USER = ["example_user1", "example_user2"]
 # 账号对应的密码，注意与账号顺序对应！！！
 PASSWORD = ["example_password1", "example_password2"]
-# 以下分别为aria2 RPC的host、端口、密钥
+# 以下分别为aria2 RPC的协议（http/https）、host、端口、密钥
+ARIA2_HTTPS = False
 ARIA2_HOST = "example.aria2.host"
 ARIA2_PORT = "port"
-ARIA2_HTTPS = True
 ARIA2_SECRET = "secret"
 # aria2下载根目录
 ARIA2_DOWNLOAD_PATH = "/mnt/sda1/aria2/pikpak"
