@@ -1,0 +1,2 @@
+# PikPakAutoOfflineDownloadBot
+自动PikPak离线下载+aria2下载+释放网盘空间的TG机器人
