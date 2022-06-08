@@ -21,6 +21,7 @@ the_config = {
 }
 
 # 全局变量
+schema = 'https' if ARIA2_HTTPS else 'http'
 pikpak_api_url = "https://api-drive.mypikpak.com"
 pikpak_user_url = "https://user.mypikpak.com"
 running = False
@@ -28,7 +29,8 @@ account_index = 0
 # 记录待下载的磁力链接
 mag_urls = []
 # PTB所需
-updater = Updater(token=TOKEN)
+updater = Updater(token=TOKEN, base_url=f"{TG_API_URL}/bot", base_file_url=f"{TG_API_URL}/file/bot")
+
 dispatcher = updater.dispatcher
 
 
@@ -63,18 +65,14 @@ def login(index):
     data['headers'] = login_headers
     data['refresh_token'] = info['refresh_token']
     the_config = data
-    logging.info('账号：{}登陆成功！'.format(data['user'][index]))
+    logging.info(f"账号：{data['user'][index]}登陆成功！")
 
 
 def get_headers():
     data = the_config
-    if 'headers' in data:
-        login_headers = data['headers']
-        return login_headers
-    else:
+    if 'headers' not in data:
         login(account_index)
-        login_headers = data['headers']
-        return login_headers
+    return data['headers']
 
 
 def magnet_upload(file_url):
@@ -149,7 +147,7 @@ def get_download_url(file_id):
                 return
 
         return download_info['name'], download_info['web_content_link'], download_info['size']
-    except:
+    except Exception:
         return "", "", ""
 
 
@@ -157,7 +155,8 @@ def get_list(folder_id):
     try:
         login_headers = get_headers()
         file_list = []
-        list_url = f"{pikpak_api_url}/drive/v1/files?parent_id=" + folder_id + "&thumbnail_size=SIZE_LARGE" + "&filters={\"trashed\":{%22eq%22:false}}"
+        list_url = f"{pikpak_api_url}/drive/v1/files?parent_id={folder_id}&thumbnail_size=SIZE_LARGE" + "&filters={\"trashed\":{%22eq%22:false}}"
+
         list_result = requests.get(url=list_url, headers=login_headers, timeout=5).json()
 
         if "error" in list_result:
@@ -170,10 +169,11 @@ def get_list(folder_id):
                 logging.error(f"{list_result['error_description']}")
                 return
 
-        file_list = file_list + list_result['files']
+        file_list += list_result['files']
 
         while list_result['next_page_token'] != "":
-            list_url = f"{pikpak_api_url}/drive/v1/files?parent_id=" + folder_id + "&page_token=" + list_result['next_page_token'] + "&thumbnail_size=SIZE_LARGE" + "&filters={\"trashed\":{%22eq%22:false}}"
+            list_url = f"{pikpak_api_url}/drive/v1/files?parent_id={folder_id}&page_token=" + list_result['next_page_token'] + "&thumbnail_size=SIZE_LARGE" + "&filters={\"trashed\":{%22eq%22:false}}"
+
             list_result = requests.get(url=list_url, headers=login_headers, timeout=5).json()
 
             file_list = file_list + list_result['files']
@@ -195,12 +195,11 @@ def get_folder_all_file(folder_id, path):
             yield down_name, down_url, a['id'], path
         else:
             if a['name'] == 'My Pack' and folder_id == '':  # 如果是根目录且文件夹是My Pack
-                new_path = path + "/"
+                new_path = f"{path}/"
             else:
                 new_path = path + a['name'] + "/"
 
-            for temp_name, temp_url, temp_id, temp_path in get_folder_all_file(folder_id=a["id"], path=new_path):
-                yield temp_name, temp_url, temp_id, temp_path
+            yield from get_folder_all_file(folder_id=a["id"], path=new_path)
 
 
 # 获取文件夹下所有文件、文件夹id，清空网盘时用
@@ -209,12 +208,10 @@ def get_folder_all(folder_id=''):
     for a in folder_list:
         if a["kind"] == "drive#file":
             yield a['id']
+        elif a["name"] == 'My Pack' and folder_id == '':
+            yield from get_folder_all(a["id"])
         else:
-            if a["name"] == 'My Pack' and folder_id == '':
-                for temp_id in get_folder_all(a["id"]):
-                    yield temp_id
-            else:
-                yield a['id']
+            yield a['id']
 
 
 # 删除文件夹、文件
@@ -337,18 +334,17 @@ def main(update: Update, context: CallbackContext):
                 # 获取到文件夹
                 if down_url == "":
                     logging.info(f"识别为文件夹:{down_name}，准备提取出每个文件并下载")
-
                     for name, url, down_file_id, path in get_folder_all_file(folder_id=file_id, path=f"{down_name}/"):
                         jsonreq = json.dumps({'jsonrpc': '2.0', 'id': 'qwer', 'method': 'aria2.addUri',
                                               'params': [f"token:{the_config['Aria2_secret']}", [url],
-                                                         {"dir": the_config['Aria2_download_path'] + '/' + path, "out": f"{name}",
+                                                         {"dir": the_config['Aria2_download_path'] + path, "out": f"{name}",
                                                           "header": download_headers, "check-certificate": False}]})
 
                         push_flag = False  # 成功推送aria2下载标志
                         # 文件夹的推送下载是网络请求密集地之一，每个链接将尝试？次
                         for tries in range(5):
                             try:
-                                response = requests.post(f'http://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc', data=jsonreq, timeout=5).json()
+                                response = requests.post(f'{schema}://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc', data=jsonreq, timeout=5).json()
                                 push_flag = True
                                 break
                             except requests.exceptions.ReadTimeout:
@@ -376,7 +372,7 @@ def main(update: Update, context: CallbackContext):
                     jsonreq = json.dumps({'jsonrpc': '2.0', 'id': 'qwer', 'method': 'aria2.addUri',
                                           'params': [f"token:{the_config['Aria2_secret']}", [down_url],
                                                      {"dir": the_config['Aria2_download_path'], "out": down_name, "header": download_headers, "check-certificate": False}]})
-                    response = requests.post(f'http://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc', data=jsonreq, timeout=5).json()
+                    response = requests.post(f'{schema}://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc', data=jsonreq, timeout=5).json()
                     gid[response['result']] = [down_name, file_id, down_url]
                     context.bot.send_message(chat_id=update.effective_chat.id, text=f'{down_name}推送aria2下载')
                     logging.info(f'{down_name}已推送aria2下载，请耐心等待...')
@@ -395,7 +391,7 @@ def main(update: Update, context: CallbackContext):
                         try:
                             jsonreq = json.dumps({'jsonrpc': '2.0', 'id': 'qwer', 'method': 'aria2.tellStatus',
                                                   'params': [f"token:{the_config['Aria2_secret']}", each_gid, ["gid", "status", "errorMessage", "dir"]]})
-                            response = requests.post(f'http://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc', data=jsonreq, timeout=5).json()
+                            response = requests.post(f'{schema}://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc', data=jsonreq, timeout=5).json()
                         except requests.exceptions.ReadTimeout:  # 超时就查询下一个gid，跳过一个无所谓的
                             logging.warning(f'查询GID{each_gid}时网络请求超时，将跳过此次查询！')
                             continue
@@ -412,7 +408,7 @@ def main(update: Update, context: CallbackContext):
                             elif status == 'error':  # 如果aria2下载产生error
                                 error_message = response["result"]["errorMessage"]  # 识别错误信息
                                 # 如果是这两种错误信息，可尝试重新推送aria2下载来解决
-                                if error_message == 'No URI available.' or error_message == 'SSL/TLS handshake failure: SSL I/O error':
+                                if error_message in ['No URI available.', 'SSL/TLS handshake failure: SSL I/O error']:
                                     # 再次推送aria2下载
                                     retry_down_name, retry_the_url, _ = get_download_url(file_id=gid[each_gid][1])
                                     # 这只可能是文件，不会是文件夹
@@ -424,7 +420,7 @@ def main(update: Update, context: CallbackContext):
                                     repush_flag = False
                                     for tries in range(5):
                                         try:
-                                            response = requests.post(f'http://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc',
+                                            response = requests.post(f'{schema}://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc',
                                                              data=jsonreq, timeout=5).json()
                                             repush_flag = True
                                             break
@@ -449,7 +445,6 @@ def main(update: Update, context: CallbackContext):
                                     # context.bot.send_message(chat_id=update.effective_chat.id,
                                     #                          text=f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}\n此文件已重新推送aria2下载！')
                                     logging.warning(f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}\t此文件已重新推送aria2下载！')
-                                # 其他错误信息就忽略吧，暂时没遇到其他错误，若有，欢迎反馈
                                 else:
                                     context.bot.send_message(chat_id=update.effective_chat.id,
                                                              text=f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}\t该文件下载直链如下，请手动下载：\n{gid[each_gid][2]}')
@@ -465,7 +460,7 @@ def main(update: Update, context: CallbackContext):
                         download_done = True
                         print_info = f'aria2下载{down_name}已完成，共{len(complete_file_id)+len(failed_gid)}个文件，其中{len(complete_file_id)}个成功，{len(failed_gid)}个失败'
                         # 输出下载失败的文件信息
-                        if len(failed_gid) != 0:
+                        if len(failed_gid):
                             print_info += '，下载失败文件为：\n'
                             for values in failed_gid.values():
                                 print_info += values[0] + '\n'
@@ -543,12 +538,10 @@ def clean(update: Update, context: CallbackContext):
 
         if len(argv) == 0:  # 直接/clean则显示帮助
             context.bot.send_message(chat_id=update.effective_chat.id, text='【用法】\n`/clean all`\t清空所有账号网盘\n/clean 账号1 [账号2] [...]\t清空指定账号网盘', parse_mode='Markdown')
-        elif argv[0] == 'a' or argv[0] == 'all':
+        elif argv[0] in ['a', 'all']:
             for temp_account_index in range(len(the_config['user'])):
                 login(temp_account_index)
-                all_file_id = []
-                for temp_file_id in get_folder_all(''):
-                    all_file_id.append(temp_file_id)
+                all_file_id = list(get_folder_all(''))
                 delete_files(all_file_id)
                 delete_trash(all_file_id)
                 context.bot.send_message(chat_id=update.effective_chat.id, text=f'账号{the_config["user"][temp_account_index]}网盘已清空！')
@@ -561,9 +554,7 @@ def clean(update: Update, context: CallbackContext):
                     context.bot.send_message(chat_id=update.effective_chat.id, text=f'账号{each_account}不存在！')
                     continue
                 login(temp_account_index)
-                all_file_id = []
-                for temp_file_id in get_folder_all(''):
-                    all_file_id.append(temp_file_id)
+                all_file_id = list(get_folder_all(''))
                 delete_files(all_file_id)
                 delete_trash(all_file_id)
                 context.bot.send_message(chat_id=update.effective_chat.id, text=f'账号{each_account}网盘已清空！')
@@ -579,7 +570,7 @@ def clean(update: Update, context: CallbackContext):
 def download_main(update: Update, context: CallbackContext, argv: list):
     global running, account_index
 
-    if len(argv) == 0:
+    if not len(argv):
         context.bot.send_message(chat_id=update.effective_chat.id, text='【用法】\n/download 账号1 [账号2] [...]')
     else:
         for each_account in argv:
@@ -598,17 +589,17 @@ def download_main(update: Update, context: CallbackContext, argv: list):
 
                 # 获取所有文件的相关信息，并推送aria2开始下载
                 for name, url, down_file_id, path in get_folder_all_file(folder_id='', path=''):
+                    print(the_config['Aria2_download_path'] + path)
                     jsonreq = json.dumps({'jsonrpc': '2.0', 'id': 'qwer', 'method': 'aria2.addUri',
                                           'params': [f"token:{the_config['Aria2_secret']}", [url],
-                                                     {"dir": the_config['Aria2_download_path'] + '/' + path, "out": f"{name}",
+                                                     {"dir": the_config['Aria2_download_path'] + path, "out": f"{name}",
                                                       "header": download_headers, "check-certificate": False}]})
 
                     push_flag = False
                     # 文件夹的推送下载是网络请求密集地之一，每个链接将尝试？次
-                    for tries in range(5):
+                    for _ in range(5):
                         try:
-                            response = requests.post(f'http://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc', data=jsonreq,
-                                                     timeout=5).json()
+                            response = requests.post(f'{schema}://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc', data=jsonreq,timeout=5).json()
                             push_flag = True
                             break
                         except requests.exceptions.ReadTimeout:
@@ -634,7 +625,7 @@ def download_main(update: Update, context: CallbackContext, argv: list):
                             jsonreq = json.dumps({'jsonrpc': '2.0', 'id': 'qwer', 'method': 'aria2.tellStatus',
                                                   'params': [f"token:{the_config['Aria2_secret']}", each_gid,
                                                              ["gid", "status", "errorMessage", "dir"]]})
-                            response = requests.post(f'http://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc', data=jsonreq,
+                            response = requests.post(f'{schema}://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc', data=jsonreq,
                                                      timeout=5).json()
                         except requests.exceptions.ReadTimeout:
                             continue
@@ -647,7 +638,7 @@ def download_main(update: Update, context: CallbackContext, argv: list):
                             elif status == 'error':
                                 error_message = response["result"]["errorMessage"]
                                 # 如果是这两种错误信息，可尝试重新推送aria2下载
-                                if error_message == 'No URI available.' or error_message == 'SSL/TLS handshake failure: SSL I/O error':
+                                if error_message in ['No URI available.', 'SSL/TLS handshake failure: SSL I/O error']:
                                     # 再次推送aria2下载
                                     retry_down_name, retry_the_url, _ = get_download_url(file_id=gid[each_gid][1])
                                     # 这只可能是文件，不会是文件夹
@@ -655,7 +646,7 @@ def download_main(update: Update, context: CallbackContext, argv: list):
                                                           'params': [f"token:{the_config['Aria2_secret']}", [retry_the_url],
                                                                      {"dir": response["result"]["dir"], "out": retry_down_name,
                                                                       "header": download_headers, "check-certificate": False}]})
-                                    response = requests.post(f'http://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc',
+                                    response = requests.post(f'{schema}://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc',
                                                              data=jsonreq, timeout=5).json()
                                     # 重新记录gid
                                     temp_gid[response['result']] = [retry_down_name, gid[each_gid][1]]
@@ -665,7 +656,6 @@ def download_main(update: Update, context: CallbackContext, argv: list):
                                     # context.bot.send_message(chat_id=update.effective_chat.id,
                                     #                          text=f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}\n此文件已重新推送aria2下载！')
                                     logging.warning(f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}\t此文件已重新推送aria2下载！')
-                                # 其他错误信息就忽略吧
                                 else:
                                     context.bot.send_message(chat_id=update.effective_chat.id,
                                                              text=f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}')
@@ -679,7 +669,7 @@ def download_main(update: Update, context: CallbackContext, argv: list):
                     if len(gid) == 0:
                         download_done = True
                         print_info = f'aria2下载账号{each_account}下所有文件已完成，共{len(complete_file_id) + len(failed_gid)}个文件，其中{len(complete_file_id)}个成功，{len(failed_gid)}个失败'
-                        if len(failed_gid) != 0:
+                        if failed_gid:
                             print_info += '，下载失败文件为：\n'
                             for values in failed_gid.values():
                                 print_info += values[0] + '\n'
@@ -698,7 +688,7 @@ def download_main(update: Update, context: CallbackContext, argv: list):
                 context.bot.send_message(chat_id=update.effective_chat.id, text=f'账号{each_account}中成功下载的文件的网盘空间已释放')
 
                 # 对于失败的文件，给出解决方案
-                if len(failed_gid) != 0:
+                if failed_gid:
                     print_info = f'对于下载失败的文件可使用命令：\n`/clean {each_account}`清空此账号下所有文件；或者：\n`/download {each_account}`重试下载此账号下所有文件'
                     context.bot.send_message(chat_id=update.effective_chat.id, text=print_info, parse_mode='Markdown')
                     logging.info(print_info)
