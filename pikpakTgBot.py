@@ -33,8 +33,9 @@ dispatcher = updater.dispatcher
 
 
 def start(update: Update, context: CallbackContext):
-    context.bot.send_message(chat_id=update.effective_chat.id, text="【命令简介】\n/pikpak\t自动离线+aria2下载+释放网盘空间\n/clean\t清空账号网盘空间（"
-                                                                    "请慎用！清空文件无法找回！！！）")
+    context.bot.send_message(chat_id=update.effective_chat.id,
+                             text="【命令简介】\n/pikpak\t自动离线+aria2下载+释放网盘空间\n/account\t管理账号（发送/account查看使用帮助）"
+                                  "\n/clean\t清空账号网盘空间（请慎用！清空文件无法找回！！！）")
 
 
 # 账号密码登录
