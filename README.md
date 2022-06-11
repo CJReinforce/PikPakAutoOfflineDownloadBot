@@ -97,6 +97,7 @@ python pikpakTgBot.py
 # Todo
 
 - 多线程下载：多账号多线程下载、vip账号多线程下载
+- docker部署
 
 # 注意事项
 
