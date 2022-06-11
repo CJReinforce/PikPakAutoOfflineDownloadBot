@@ -11,7 +11,6 @@ from config import *
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-
 # 全局变量
 SCHEMA = 'https' if ARIA2_HTTPS else 'http'
 PIKPAK_API_URL = "https://api-drive.mypikpak.com"
@@ -284,7 +283,7 @@ def delete_trash(file_id, index):
     else:
         delete_files_data = {"ids": [file_id]}
     # 发送请求
-    delete_files_result = requests.post(url=delete_files_url, headers=login_headers, json=delete_files_data,  timeout=5).json()
+    delete_files_result = requests.post(url=delete_files_url, headers=login_headers, json=delete_files_data, timeout=5).json()
     # 处理错误
     if "error" in delete_files_result:
         if delete_files_result['error_code'] == 16:
@@ -383,7 +382,6 @@ def main(update: Update, context: CallbackContext):
                 else:  # 其他情况都换个号再试
                     continue
 
-
             # 如果找到了任务并且任务已完成，则开始从网盘下载到本地
             if mag_id and find and done:  # 判断mag_id是否为空防止所有号次数用尽的情况
                 gid = {}  # 记录每个下载任务的gid，{gid:[文件名,file_id,下载直链]}
@@ -408,7 +406,7 @@ def main(update: Update, context: CallbackContext):
                                 push_flag = True
                                 break
                             except requests.exceptions.ReadTimeout:
-                                logging.warning(f'{name}第{tries+1}(/5)次推送下载超时，将重试！')
+                                logging.warning(f'{name}第{tries + 1}(/5)次推送下载超时，将重试！')
                                 continue
                             except json.JSONDecodeError:
                                 logging.warning(f'{name}第{tries + 1}(/5)次推送下载出错，可能是frp故障，将重试！')
@@ -431,6 +429,7 @@ def main(update: Update, context: CallbackContext):
 
                 # 否则是单个文件，只推送一次，不用太担心网络请求出错
                 else:
+                    logging.info('识别为单文件，将直接推送aria2下载')
                     jsonreq = json.dumps({'jsonrpc': '2.0', 'id': 'qwer', 'method': 'aria2.addUri',
                                           'params': [f"token:{ARIA2_SECRET}", [down_url],
                                                      {"dir": ARIA2_DOWNLOAD_PATH, "out": down_name, "header": download_headers}]})
@@ -487,10 +486,10 @@ def main(update: Update, context: CallbackContext):
                                             repush_flag = True
                                             break
                                         except requests.exceptions.ReadTimeout:
-                                            logging.warning(f'{retry_down_name}下载异常后重新推送第{tries+1}(/5)次网络请求超时！将重试')
+                                            logging.warning(f'{retry_down_name}下载异常后重新推送第{tries + 1}(/5)次网络请求超时！将重试')
                                             continue
                                         except json.JSONDecodeError:
-                                            logging.warning(f'{retry_down_name}下载异常后重新推送第{tries+1}(/5)次返回结果错误，可能是frp故障！将重试！')
+                                            logging.warning(f'{retry_down_name}下载异常后重新推送第{tries + 1}(/5)次返回结果错误，可能是frp故障！将重试！')
                                             sleep(5)  # frp的问题就休息一会
                                             continue
                                     if not repush_flag:  # ?次重新推送失败，则认为此文件下载失败，让用户手动下载
@@ -526,7 +525,7 @@ def main(update: Update, context: CallbackContext):
                     gid = temp_gid
                     if len(gid) == 0:
                         download_done = True
-                        print_info = f'aria2下载{down_name}已完成，共{len(complete_file_id)+len(failed_gid)}个文件，' \
+                        print_info = f'aria2下载{down_name}已完成，共{len(complete_file_id) + len(failed_gid)}个文件，' \
                                      f'其中{len(complete_file_id)}个成功，{len(failed_gid)}个失败'
                         # 输出下载失败的文件信息
                         if len(failed_gid):
@@ -646,8 +645,8 @@ def clean(update: Update, context: CallbackContext):
 
 # 打印账号和是否vip
 def print_user_vip():
-    print_info = '账号                                   vip\n' \
-                 ' -----------------------------        --------- \n'
+    print_info = '账号                                   vip\n'  # \
+    # ' -----------------------------        --------- \n'
     for temp_index, each_user in enumerate(USER):
         flag = get_my_vip(temp_index)
         if flag == 0:
@@ -657,7 +656,7 @@ def print_user_vip():
         elif flag == 2:
             flag = '?'
         else:
-            flag = '××'
+            flag = '××'  # 登陆失败，检查账号密码
         print_info += f' `{each_user}`      {flag}   \n'
     return print_info.rstrip()
 
@@ -686,7 +685,7 @@ def get_my_vip(index):
         login_headers = get_headers(index)
 
         me_url = f"{PIKPAK_API_URL}/drive/v1/privilege/vip"
-        me_result = requests.get(url=me_url, headers=login_headers,  timeout=5).json()
+        me_result = requests.get(url=me_url, headers=login_headers, timeout=5).json()
     except Exception:
         return 3
 
@@ -695,10 +694,10 @@ def get_my_vip(index):
             logging.info(f"账号{USER[index]}登录过期，正在重新登录")
             login(index)
             login_headers = get_headers(index)
-            me_result = requests.get(url=me_url, headers=login_headers, timeout=5)
+            me_result = requests.get(url=me_url, headers=login_headers, timeout=5).json()
         else:
             logging.error(f"获取vip信息失败{me_result.json()['error_description']}")
-            return
+            return 3
 
     if me_result['data']['status'] == 'ok':
         return 0
@@ -716,15 +715,17 @@ def account_manage(update: Update, context: CallbackContext):
     argv = context.args
 
     if len(argv) == 0:
-        context.bot.send_message(chat_id=update.effective_chat.id, text='【用法】\n罗列账号：/account l/list\n添加账号：/account a/add 账号 '
-                                                                        '密码\n删除账号：/account d/delete 账号1 \[账号2] \[...]\n【示例】\n'
-                                                                        '`/account l`\n`/account a 12345678@qq.com 12345678`\n'
-                                                                        '`/account d 12345678@qq.com`',
+        context.bot.send_message(chat_id=update.effective_chat.id, text='【用法】\n罗列账号：/account l/list \[vip]\n添加账号：/account a/add '
+                                                                        '账号 密码\n删除账号：/account d/delete 账号1 \[账号2] \[...]\n【示例】\n'
+                                                                        '`/account l`\n`/account l vip`\n`/account a 12345678@qq.com '
+                                                                        '12345678`\n`/account d 12345678@qq.com`',
                                  parse_mode='Markdown')
 
     elif argv[0] in ['l', 'list']:
-        print_info = print_user_vip()
-        context.bot.send_message(chat_id=update.effective_chat.id, text=print_info, parse_mode='Markdown')
+        if len(argv) == 2 and argv[1] == 'vip':
+            context.bot.send_message(chat_id=update.effective_chat.id, text=print_user_vip(), parse_mode='Markdown')
+        else:
+            context.bot.send_message(chat_id=update.effective_chat.id, text=print_user(), parse_mode='Markdown')
 
     elif argv[0] in ['a', 'add']:
         if not running:
@@ -763,6 +764,7 @@ def account_manage(update: Update, context: CallbackContext):
             context.bot.send_message(chat_id=update.effective_chat.id, text='其他命令正在运行，为避免冲突，请稍后再试~')
     else:
         context.bot.send_message(chat_id=update.effective_chat.id, text='未识别的命令，请检查！')
+
 
 '''
 # 想弃用/download命令
