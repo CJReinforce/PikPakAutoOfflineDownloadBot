@@ -339,14 +339,14 @@ def main(update: Update, context: CallbackContext, magnet):
                             done = True
                             file_id = each_down['file_id']
                             # 输出信息
-                            print_info = f'账号{each_account}离线下载磁链已完成!：\n{mag_url_simple}\n文件名称：{mag_name}'
+                            print_info = f'账号{each_account}离线下载磁链已完成：\n{mag_url_simple}\n文件名称：{mag_name}'
                             context.bot.send_message(chat_id=update.effective_chat.id, text=print_info)
                             logging.info(print_info)
                         elif each_down['progress'] == 100:  # 可能存在错误但还是允许推送aria2下载了
                             done = True
                             file_id = each_down['file_id']
                             # 输出信息
-                            print_info = f'账号{each_account}离线下载磁链已完成!:\n{mag_url_simple}\n但含有错误信息：' \
+                            print_info = f'账号{each_account}离线下载磁链已完成:\n{mag_url_simple}\n但含有错误信息：' \
                                          f'{each_down["message"].strip()}！\n文件名称：{mag_name}'
                             context.bot.send_message(chat_id=update.effective_chat.id, text=print_info)
                             logging.warning(print_info)
@@ -425,9 +425,8 @@ def main(update: Update, context: CallbackContext, magnet):
                     logging.info(f'{path}{name}推送aria2下载')
 
                 # 文件夹所有文件都推送完后再发送信息，避免消息过多
-                print_info = f'{down_name}文件夹下所有文件已推送aria2下载，请耐心等待...'
-                context.bot.send_message(chat_id=update.effective_chat.id, text=print_info)
-                logging.info(print_info)
+                context.bot.send_message(chat_id=update.effective_chat.id, text=f'文件夹已推送aria2下载：\n{down_name}\n请耐心等待...')
+                logging.info(f'{down_name}文件夹下所有文件已推送aria2下载，请耐心等待...')
 
             # 否则是单个文件，只推送一次，不用太担心网络请求出错
             else:
@@ -438,7 +437,7 @@ def main(update: Update, context: CallbackContext, magnet):
                                                  {"dir": ARIA2_DOWNLOAD_PATH, "out": down_name, "header": download_headers}]})
                 response = requests.post(f'{SCHEMA}://{ARIA2_HOST}:{ARIA2_PORT}/jsonrpc', data=jsonreq, timeout=5).json()
                 gid[response['result']] = [down_name, file_id, down_url]
-                context.bot.send_message(chat_id=update.effective_chat.id, text=f'{down_name}推送aria2下载')
+                context.bot.send_message(chat_id=update.effective_chat.id, text=f'文件已推送aria2下载：\n{down_name}\n请耐心等待...')
                 logging.info(f'{down_name}已推送aria2下载，请耐心等待...')
 
             logging.info(f'睡眠30s，之后将开始查询{down_name}下载进度...')
@@ -525,7 +524,7 @@ def main(update: Update, context: CallbackContext, magnet):
                 gid = temp_gid
                 if len(gid) == 0:
                     download_done = True
-                    print_info = f'aria2下载{down_name}已完成，共{len(complete_file_id) + len(failed_gid)}个文件，' \
+                    print_info = f'aria2下载已完成：\n{down_name}\n共{len(complete_file_id) + len(failed_gid)}个文件，' \
                                  f'其中{len(complete_file_id)}个成功，{len(failed_gid)}个失败'
                     # 输出下载失败的文件信息
                     if len(failed_gid):
@@ -540,20 +539,25 @@ def main(update: Update, context: CallbackContext, magnet):
                         logging.info(f'账号{each_account}已删除{down_name}中下载成功的回收站文件')
                         print_info += f'账号{each_account}中下载成功的网盘文件已删除\n'
 
+                        context.bot.send_message(chat_id=update.effective_chat.id, text=print_info)
+                        logging.info(print_info)
+
                         # /download命令仅打算临时解决问题，当/pikpak命令足够健壮后将弃用/download命令
-                        print_info += f'对于下载失败的文件可使用命令：\n`/clean {each_account}`清空此账号下所有文件\n~~或者使用临时命令：~~' \
-                                      f'\n~~`/download {each_account}`重试下载此账号下所有文件~~'
+                        print_info = f'对于下载失败的文件可使用命令：\n`/clean {each_account}`清空此账号下所有文件\n~~或者使用临时命令：~~' \
+                                     f'\n~~`/download {each_account}`重试下载此账号下所有文件~~'
+                        context.bot.send_message(chat_id=update.effective_chat.id, text=print_info, parse_mode='Markdown')
+                        logging.info(print_info)
                     else:
                         # 没有失败文件，则直接删除该文件根目录
                         delete_files(file_id, each_account)
                         logging.info(f'账号{each_account}已删除{down_name}网盘文件')
                         delete_trash(file_id, each_account)
                         logging.info(f'账号{each_account}已删除{down_name}回收站文件')
-                        print_info += f'\n账号{each_account}中该文件的网盘空间已释放'
 
-                    # 发送下载结果统计信息
-                    context.bot.send_message(chat_id=update.effective_chat.id, text=print_info, parse_mode='Markdown')
-                    logging.info(print_info)
+                        print_info += f'\n账号{each_account}中该文件的网盘空间已释放'
+                        # 发送下载结果统计信息
+                        context.bot.send_message(chat_id=update.effective_chat.id, text=print_info)
+                        logging.info(print_info)
                 else:
                     logging.info(f'aria2下载{down_name}还未完成，睡眠20s后进行下一次查询...')
                     sleep(20)
@@ -592,10 +596,10 @@ def pikpak(update: Update, context: CallbackContext):
 
 def check_download_thread_status():
     global thread_list
-    thread_list = [i for i in thread_list if i.isAlive()]
+    thread_list = [i for i in thread_list if i.is_alive()]
 
-    # 未完成返回True，完成返回False
-    if len(thread_list) == 0:
+    # 未完成返回True，完成返回False，类似running标志
+    if len(thread_list):
         return True
     else:
         return False
