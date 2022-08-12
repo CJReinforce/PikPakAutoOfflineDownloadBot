@@ -85,15 +85,30 @@ def magnet_upload(file_url, account):
     # 请求离线下载所需数据
     login_headers = get_headers(account)
     torrent_url = f"{PIKPAK_API_URL}/drive/v1/files"
-    torrent_data = {
-        "kind": "drive#file",
-        "name": "",
-        "upload_type": "UPLOAD_TYPE_URL",
-        "url": {
-            "url": file_url
-        },
-        "folder_type": "DOWNLOAD"
-    }
+    # 磁力下载
+    if str(file_url).startswith("'magnet:?'"):
+        torrent_data = {
+            "kind": "drive#file",
+            "name": "",
+            "upload_type": "UPLOAD_TYPE_URL",
+            "url": {
+                "url": file_url
+            },
+            "folder_type": "DOWNLOAD"
+        }
+    # 普通下载
+    else:
+        torrent_data = {
+            "kind": "drive#file",
+            "name": "",
+            "upload_type": "UPLOAD_TYPE_URL",
+            "params": {"from": "file"},
+            "parent_id": "",
+            "url": {
+                "url": file_url
+            },
+            "folder_type": "DOWNLOAD"
+        }
     # 请求离线下载
     torrent_result = requests.post(url=torrent_url, headers=login_headers, json=torrent_data, timeout=5).json()
 
@@ -114,9 +129,9 @@ def magnet_upload(file_url, account):
     file_url_part = re.search(r'^(magnet:\?).*(xt=.+?)(&|$)', file_url)
     if file_url_part:
         file_url_simple = ''.join(file_url_part.groups()[:-1])
-        logging.info(f"账号{account}添加离线磁力任务:{file_url_simple}")
+        logging.info(f"账号{account}添加离线任务:{file_url_simple}")
     else:
-        logging.info(f"账号{account}添加离线磁力任务:{file_url}")
+        logging.info(f"账号{account}添加离线任务:{file_url}")
 
     # 返回离线任务id、下载文件名
     return torrent_result['task']['id'], torrent_result['task']['name']
