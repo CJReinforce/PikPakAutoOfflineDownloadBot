@@ -1,12 +1,15 @@
-import os
-from telegram.ext import Updater, CallbackContext, CommandHandler, MessageHandler, Filters
-import logging
-from telegram import Update
-import re
-from time import sleep, time
-import requests
 import json
+import logging
+import os
+import re
 import threading
+from time import sleep, time
+
+import requests
+import telegram
+from telegram import Update
+from telegram.ext import Updater, CallbackContext, CommandHandler, Handler
+
 from config import *
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -31,6 +34,43 @@ else:
     updater = Updater(token=TOKEN, base_url=f"{TG_API_URL}/bot", base_file_url=f"{TG_API_URL}/file/bot")
 
 dispatcher = updater.dispatcher
+
+
+# ptb官方提供的方法，进行权限限制
+# from functools import wraps
+#
+# LIST_OF_ADMINS = [497836069]
+
+
+# def restricted(func):
+#     @wraps(func)
+#     def wrapped(update, context, *args, **kwargs):
+#         user_id = update.effective_user.id
+#         if user_id not in LIST_OF_ADMINS:
+#             print(f"Unauthorized access denied for {user_id}.")
+#             return
+#         return func(update, context, *args, **kwargs)
+#
+#     return wrapped
+#
+#
+# @restricted
+
+
+# Stack Overflow 用户@Majid提供的方法
+# from: https://stackoverflow.com/questions/62466399/how-can-i-restrict-a-telegram-bots-use-to-some-users-only#answers-header
+class AdminHandler(Handler):
+    def __init__(self):
+        super().__init__(self.cb)
+
+    def cb(self, update: telegram.Update, context):
+        update.message.reply_text('Unauthorized access')
+
+    def check_update(self, update: telegram.update.Update):
+        if update.message is None or update.message.from_user.id not in ADMIN_IDS:
+            return True
+
+        return False
 
 
 def start(update: Update, context: CallbackContext):
@@ -179,7 +219,7 @@ def get_list(folder_id, account):
         file_list = []
         # 准备信息
         login_headers = get_headers(account)
-        list_url = f"{PIKPAK_API_URL}/drive/v1/files?parent_id={folder_id}&thumbnail_size=SIZE_LARGE" +\
+        list_url = f"{PIKPAK_API_URL}/drive/v1/files?parent_id={folder_id}&thumbnail_size=SIZE_LARGE" + \
                    "&filters={\"trashed\":{%22eq%22:false}}"
         # 发送请求
         list_result = requests.get(url=list_url, headers=login_headers, timeout=5).json()
@@ -198,7 +238,8 @@ def get_list(folder_id, account):
 
         # 获取下一页
         while list_result['next_page_token'] != "":
-            list_url = f"{PIKPAK_API_URL}/drive/v1/files?parent_id={folder_id}&page_token=" + list_result['next_page_token'] + \
+            list_url = f"{PIKPAK_API_URL}/drive/v1/files?parent_id={folder_id}&page_token=" + list_result[
+                'next_page_token'] + \
                        "&thumbnail_size=SIZE_LARGE" + "&filters={\"trashed\":{%22eq%22:false}} "
 
             list_result = requests.get(url=list_url, headers=login_headers, timeout=5).json()
@@ -262,14 +303,16 @@ def delete_files(file_id, account):
     else:
         delete_files_data = {"ids": [file_id]}
     # 发送请求
-    delete_files_result = requests.post(url=delete_files_url, headers=login_headers, json=delete_files_data, timeout=5).json()
+    delete_files_result = requests.post(url=delete_files_url, headers=login_headers, json=delete_files_data,
+                                        timeout=5).json()
     # 处理错误
     if "error" in delete_files_result:
         if delete_files_result['error_code'] == 16:
             logging.info(f"账号{account}登录过期，正在重新登录")
             login(account)
             login_headers = get_headers(account)
-            delete_files_result = requests.post(url=delete_files_url, headers=login_headers, json=delete_files_data, timeout=5).json()
+            delete_files_result = requests.post(url=delete_files_url, headers=login_headers, json=delete_files_data,
+                                                timeout=5).json()
 
         else:
             logging.error(f"账号{account}删除网盘文件失败，错误信息：{delete_files_result['error_description']}")
@@ -288,14 +331,16 @@ def delete_trash(file_id, account):
     else:
         delete_files_data = {"ids": [file_id]}
     # 发送请求
-    delete_files_result = requests.post(url=delete_files_url, headers=login_headers, json=delete_files_data, timeout=5).json()
+    delete_files_result = requests.post(url=delete_files_url, headers=login_headers, json=delete_files_data,
+                                        timeout=5).json()
     # 处理错误
     if "error" in delete_files_result:
         if delete_files_result['error_code'] == 16:
             logging.info(f"账号{account}登录过期，正在重新登录")
             login(account)
             login_headers = get_headers(account)
-            delete_files_result = requests.post(url=delete_files_url, headers=login_headers, json=delete_files_data, timeout=5).json()
+            delete_files_result = requests.post(url=delete_files_url, headers=login_headers, json=delete_files_data,
+                                                timeout=5).json()
         else:
             logging.error(f"账号{account}删除回收站文件失败，错误信息：{delete_files_result['error_description']}")
             return False
@@ -387,7 +432,8 @@ def main(update: Update, context: CallbackContext, magnet):
         if mag_id and find and done:  # 判断mag_id是否为空防止所有号次数用尽的情况
             gid = {}  # 记录每个下载任务的gid，{gid:[文件名,file_id,下载直链]}
             # 偶尔会出现aria2下载失败，报ssl i/o error错误，试试加上headers
-            download_headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.9; rv:50.0) Gecko/20100101 Firefox/50.0'}
+            download_headers = {
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.9; rv:50.0) Gecko/20100101 Firefox/50.0'}
 
             down_name, down_url = get_download_url(file_id, each_account)
             # 获取到文件夹
@@ -404,7 +450,8 @@ def main(update: Update, context: CallbackContext, magnet):
                     # 文件夹的推送下载是网络请求密集地之一，每个链接将尝试5次
                     for tries in range(5):
                         try:
-                            response = requests.post(f'{SCHEMA}://{ARIA2_HOST}:{ARIA2_PORT}/jsonrpc', data=jsonreq, timeout=5).json()
+                            response = requests.post(f'{SCHEMA}://{ARIA2_HOST}:{ARIA2_PORT}/jsonrpc', data=jsonreq,
+                                                     timeout=5).json()
                             push_flag = True
                             break
                         except requests.exceptions.ReadTimeout:
@@ -425,7 +472,8 @@ def main(update: Update, context: CallbackContext, magnet):
                     logging.info(f'{path}{name}推送aria2下载')
 
                 # 文件夹所有文件都推送完后再发送信息，避免消息过多
-                context.bot.send_message(chat_id=update.effective_chat.id, text=f'文件夹已推送aria2下载：\n{down_name}\n请耐心等待...')
+                context.bot.send_message(chat_id=update.effective_chat.id,
+                                         text=f'文件夹已推送aria2下载：\n{down_name}\n请耐心等待...')
                 logging.info(f'{down_name}文件夹下所有文件已推送aria2下载，请耐心等待...')
 
             # 否则是单个文件，只推送一次，不用太担心网络请求出错
@@ -434,8 +482,10 @@ def main(update: Update, context: CallbackContext, magnet):
 
                 jsonreq = json.dumps({'jsonrpc': '2.0', 'id': 'qwer', 'method': 'aria2.addUri',
                                       'params': [f"token:{ARIA2_SECRET}", [down_url],
-                                                 {"dir": ARIA2_DOWNLOAD_PATH, "out": down_name, "header": download_headers}]})
-                response = requests.post(f'{SCHEMA}://{ARIA2_HOST}:{ARIA2_PORT}/jsonrpc', data=jsonreq, timeout=5).json()
+                                                 {"dir": ARIA2_DOWNLOAD_PATH, "out": down_name,
+                                                  "header": download_headers}]})
+                response = requests.post(f'{SCHEMA}://{ARIA2_HOST}:{ARIA2_PORT}/jsonrpc', data=jsonreq,
+                                         timeout=5).json()
                 gid[response['result']] = [down_name, file_id, down_url]
                 context.bot.send_message(chat_id=update.effective_chat.id, text=f'文件已推送aria2下载：\n{down_name}\n请耐心等待...')
                 logging.info(f'{down_name}已推送aria2下载，请耐心等待...')
@@ -453,8 +503,10 @@ def main(update: Update, context: CallbackContext, magnet):
                     # 这里是网络请求最密集的地方，一次查询失败跳过即可
                     try:
                         jsonreq = json.dumps({'jsonrpc': '2.0', 'id': 'qwer', 'method': 'aria2.tellStatus',
-                                              'params': [f"token:{ARIA2_SECRET}", each_gid, ["gid", "status", "errorMessage", "dir"]]})
-                        response = requests.post(f'{SCHEMA}://{ARIA2_HOST}:{ARIA2_PORT}/jsonrpc', data=jsonreq, timeout=5).json()
+                                              'params': [f"token:{ARIA2_SECRET}", each_gid,
+                                                         ["gid", "status", "errorMessage", "dir"]]})
+                        response = requests.post(f'{SCHEMA}://{ARIA2_HOST}:{ARIA2_PORT}/jsonrpc', data=jsonreq,
+                                                 timeout=5).json()
                     except requests.exceptions.ReadTimeout:  # 超时就查询下一个gid，跳过一个无所谓的
                         logging.warning(f'查询GID{each_gid}时网络请求超时，将跳过此次查询！')
                         continue
@@ -477,7 +529,8 @@ def main(update: Update, context: CallbackContext, magnet):
                                 # 这只可能是文件，不会是文件夹
                                 jsonreq = json.dumps({'jsonrpc': '2.0', 'id': 'qwer', 'method': 'aria2.addUri',
                                                       'params': [f"token:{ARIA2_SECRET}", [retry_the_url],
-                                                                 {"dir": response["result"]["dir"], "out": retry_down_name,
+                                                                 {"dir": response["result"]["dir"],
+                                                                  "out": retry_down_name,
                                                                   "header": download_headers}]})
                                 # 当失败文件较多时，这里也是网络请求密集地
                                 repush_flag = False
@@ -491,7 +544,8 @@ def main(update: Update, context: CallbackContext, magnet):
                                         logging.warning(f'{retry_down_name}下载异常后重新推送第{tries + 1}(/5)次网络请求超时！将重试')
                                         continue
                                     except json.JSONDecodeError:
-                                        logging.warning(f'{retry_down_name}下载异常后重新推送第{tries + 1}(/5)次返回结果错误，可能是frp故障！将重试！')
+                                        logging.warning(
+                                            f'{retry_down_name}下载异常后重新推送第{tries + 1}(/5)次返回结果错误，可能是frp故障！将重试！')
                                         sleep(5)  # frp的问题就休息一会
                                         continue
                                 if not repush_flag:  # ?次重新推送失败，则认为此文件下载失败，让用户手动下载
@@ -516,7 +570,8 @@ def main(update: Update, context: CallbackContext, magnet):
                                 failed_gid[each_gid] = temp_gid.pop(each_gid)  # 认为该任务失败
 
                     except KeyError:  # 此时任务可能已被手动删除
-                        context.bot.send_message(chat_id=update.effective_chat.id, text=f'aria2下载{gid[each_gid][0]}任务被删除！')
+                        context.bot.send_message(chat_id=update.effective_chat.id,
+                                                 text=f'aria2下载{gid[each_gid][0]}任务被删除！')
                         logging.warning(f'aria2下载{gid[each_gid][0]}任务被删除！')
                         failed_gid[each_gid] = temp_gid.pop(each_gid)  # 认为该任务失败
 
@@ -545,7 +600,8 @@ def main(update: Update, context: CallbackContext, magnet):
                         # /download命令仅打算临时解决问题，当/pikpak命令足够健壮后将弃用/download命令
                         print_info = f'对于下载失败的文件可使用命令：\n`/clean {each_account}`清空此账号下所有文件\n~~或者使用临时命令：~~' \
                                      f'\n~~`/download {each_account}`重试下载此账号下所有文件~~'
-                        context.bot.send_message(chat_id=update.effective_chat.id, text=print_info, parse_mode='Markdown')
+                        context.bot.send_message(chat_id=update.effective_chat.id, text=print_info,
+                                                 parse_mode='Markdown')
                         logging.info(print_info)
                     else:
                         # 没有失败文件，则直接删除该文件根目录
@@ -610,8 +666,9 @@ def clean(update: Update, context: CallbackContext):
 
     # 清空网盘应该阻塞住进程，防止一边下一边删
     if len(argv) == 0:  # 直接/clean则显示帮助
-        context.bot.send_message(chat_id=update.effective_chat.id, text='【用法】\n`/clean all`\t清空所有账号网盘\n/clean 账号1 [账号2] [...]'
-                                                                        '\t清空指定账号网盘', parse_mode='Markdown')
+        context.bot.send_message(chat_id=update.effective_chat.id,
+                                 text='【用法】\n`/clean all`\t清空所有账号网盘\n/clean 账号1 [账号2] [...]'
+                                      '\t清空指定账号网盘', parse_mode='Markdown')
 
     # 如果未完成
     elif check_download_thread_status():
@@ -681,9 +738,10 @@ def print_user():
 def record_config():
     # 写入同目录下的config.py文件
     with open(os.path.abspath(os.path.dirname(__file__)) + '/config.py', 'w') as f:
-        f.write(f'TOKEN = "{TOKEN}"\nUSER = {USER}\nPASSWORD = {PASSWORD}\nARIA2_HTTPS = {ARIA2_HTTPS}\nARIA2_HOST = "{ARIA2_HOST}"\n'
-                f'ARIA2_PORT = "{ARIA2_PORT}"\nARIA2_SECRET = "{ARIA2_SECRET}"\nARIA2_DOWNLOAD_PATH = "{ARIA2_DOWNLOAD_PATH}"\n'
-                f'TG_API_URL = "{TG_API_URL}"')
+        f.write(
+            f'TOKEN = "{TOKEN}"\nUSER = {USER}\nPASSWORD = {PASSWORD}\nARIA2_HTTPS = {ARIA2_HTTPS}\nARIA2_HOST = "{ARIA2_HOST}"\n'
+            f'ARIA2_PORT = "{ARIA2_PORT}"\nARIA2_SECRET = "{ARIA2_SECRET}"\nARIA2_DOWNLOAD_PATH = "{ARIA2_DOWNLOAD_PATH}"\n'
+            f'TG_API_URL = "{TG_API_URL}"')
     logging.info('已更新config.py文件')
 
 
@@ -723,10 +781,11 @@ def account_manage(update: Update, context: CallbackContext):
     argv = context.args
 
     if len(argv) == 0:
-        context.bot.send_message(chat_id=update.effective_chat.id, text='【用法】\n罗列账号：/account l/list \[vip]\n添加账号：/account a/add '
-                                                                        '账号 密码\n删除账号：/account d/delete 账号1 \[账号2] \[...]\n【示例】\n'
-                                                                        '`/account l`\n`/account l vip`\n`/account a 12345678@qq.com '
-                                                                        '12345678`\n`/account d 12345678@qq.com`',
+        context.bot.send_message(chat_id=update.effective_chat.id,
+                                 text='【用法】\n罗列账号：/account l/list \[vip]\n添加账号：/account a/add '
+                                      '账号 密码\n删除账号：/account d/delete 账号1 \[账号2] \[...]\n【示例】\n'
+                                      '`/account l`\n`/account l vip`\n`/account a 12345678@qq.com '
+                                      '12345678`\n`/account d 12345678@qq.com`',
                                  parse_mode='Markdown')
 
     elif argv[0] in ['l', 'list']:
@@ -925,6 +984,7 @@ clean_handler = CommandHandler(['clean', 'clear'], clean)
 account_handler = CommandHandler('account', account_manage)
 # download_handler = CommandHandler('download', download)  # download命令在pikpak命令健壮后将弃用
 
+dispatcher.add_handler(AdminHandler())
 # dispatcher.add_handler(download_handler)
 dispatcher.add_handler(account_handler)
 dispatcher.add_handler(start_handler)
