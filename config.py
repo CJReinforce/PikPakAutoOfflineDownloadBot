@@ -1,5 +1,7 @@
 # TG机器人的令牌，tg找@BotFather创建机器人即可获取
 TOKEN = 'token'
+# TG用户ID，限制发送消息的用户
+ADMIN_IDS = [12345678]
 # pikpak账号，可以为手机号、邮箱，支持任意多账号
 USER = ["example_user1", "example_user2"]
 # 账号对应的密码，注意与账号顺序对应！！！
