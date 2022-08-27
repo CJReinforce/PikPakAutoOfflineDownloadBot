@@ -8,7 +8,7 @@ from time import sleep, time
 import requests
 import telegram
 from telegram import Update
-from telegram.ext import Updater, CallbackContext, CommandHandler, Handler
+from telegram.ext import Updater, CallbackContext, CommandHandler, Handler, MessageHandler, Filters
 
 from config import *
 
@@ -75,7 +75,7 @@ class AdminHandler(Handler):
 
 def start(update: Update, context: CallbackContext):
     context.bot.send_message(chat_id=update.effective_chat.id,
-                             text="【命令简介】\n/pikpak\t自动离线+aria2下载+释放网盘空间\n/account\t管理账号（发送/account查看使用帮助）"
+                             text="【命令简介】\n/p\t自动离线+aria2下载+释放网盘空间\n/account\t管理账号（发送/account查看使用帮助）"
                                   "\n/clean\t清空账号网盘空间（请慎用！清空文件无法找回！！！）")
 
 
@@ -374,7 +374,7 @@ def main(update: Update, context: CallbackContext, magnet):
             logging.info('5s后将检查离线下载进度...')
             sleep(5)  # 等待5秒，一般是秒离线，可以保证大多数情况下直接就完成了离线下载
             offline_start = time()  # 离线开始时间
-            while (not done) and (time() - offline_start < 60):  # 要么完成要么超时
+            while (not done) and (time() - offline_start < 60 * 2):  # 要么完成要么超时
                 temp = get_offline_list(each_account)  # 获取离线列表
                 find = False  # 离线列表中找到了任务id的标志
                 for each_down in temp:
@@ -625,7 +625,11 @@ def main(update: Update, context: CallbackContext, magnet):
 
 
 def pikpak(update: Update, context: CallbackContext):
-    argv = context.args  # 获取命令参数
+    # 判断是文本消息还是命令消息
+    if update.message:
+        argv = update.message.text.split()
+    elif update.callback_query:
+        argv = context.args  # 获取命令参数
 
     if len(argv) == 0:  # 如果仅为/pikpak命令，没有附带参数则返回帮助信息
         context.bot.send_message(chat_id=update.effective_chat.id, text='【用法】\n/pikpak magnet1 [magnet2] [...]')
@@ -979,15 +983,17 @@ def download(update: Update, context: CallbackContext):
 '''
 
 start_handler = CommandHandler(['start', 'help'], start)
-pikpak_handler = CommandHandler('pikpak', pikpak)
+pikpak_handler = CommandHandler('p', pikpak)
 clean_handler = CommandHandler(['clean', 'clear'], clean)
 account_handler = CommandHandler('account', account_manage)
+magnet_handler = MessageHandler(Filters.regex('^magnet:\?xt=urn:btih:[0-9a-fA-F]{40,}.*$'), pikpak)
 # download_handler = CommandHandler('download', download)  # download命令在pikpak命令健壮后将弃用
 
 dispatcher.add_handler(AdminHandler())
 # dispatcher.add_handler(download_handler)
 dispatcher.add_handler(account_handler)
 dispatcher.add_handler(start_handler)
+dispatcher.add_handler(magnet_handler)
 dispatcher.add_handler(pikpak_handler)
 dispatcher.add_handler(clean_handler)
 
