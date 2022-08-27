@@ -626,9 +626,9 @@ def main(update: Update, context: CallbackContext, magnet):
 
 def pikpak(update: Update, context: CallbackContext):
     # 判断是文本消息还是命令消息
-    if update.message:
+    if context.args is None:
         argv = update.message.text.split()
-    elif update.callback_query:
+    else:
         argv = context.args  # 获取命令参数
 
     if len(argv) == 0:  # 如果仅为/pikpak命令，没有附带参数则返回帮助信息
@@ -649,6 +649,8 @@ def pikpak(update: Update, context: CallbackContext):
                 else:  # 否则输出未识别信息
                     print_info += f'未识别链接：{each_magnet}'
                 print_info += '\n\n'
+            else:
+                print_info += f'未识别链接：{each_magnet}'
 
         context.bot.send_message(chat_id=update.effective_chat.id, text=print_info.rstrip())
         logging.info(print_info.rstrip())
