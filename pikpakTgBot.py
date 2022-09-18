@@ -88,6 +88,18 @@ def registerFuc():
         return False
 
 
+def auto_delete_judge(account):
+    try:
+        status = AUTO_DELETE[account]
+        if status.upper() == 'TRUE' or status == '1':
+            return True
+        else:
+            return False
+    except Exception as e:
+        logging.error(e)
+        return False
+
+
 def start(update: Update, context: CallbackContext):
     context.bot.send_message(chat_id=update.effective_chat.id,
                              text="【命令简介】\n"
@@ -311,7 +323,12 @@ def get_folder_all(account):
 
 
 # 删除文件夹、文件
-def delete_files(file_id, account):
+def delete_files(file_id, account, mode='normal'):
+    # 判断是否开启自动清理
+    if mode == 'normal':
+        if not auto_delete_judge(account):
+            logging.info('账号{}未开启自动清理'.format(account))
+            return False
     # 准备数据
     login_headers = get_headers(account)
     delete_files_url = f"{PIKPAK_API_URL}/drive/v1/files:batchTrash"
@@ -339,7 +356,12 @@ def delete_files(file_id, account):
 
 
 # 删除回收站id
-def delete_trash(file_id, account):
+def delete_trash(file_id, account, mode='normal'):
+    # 判断是否开启自动清理
+    if mode == 'normal':
+        if not auto_delete_judge(account):
+            logging.info('账号{}未开启自动清理'.format(account))
+            return False
     # 准备信息
     login_headers = get_headers(account)
     delete_files_url = f"{PIKPAK_API_URL}/drive/v1/files:batchDelete"
@@ -605,11 +627,14 @@ def main(update: Update, context: CallbackContext, magnet):
                             print_info += values[0] + '\n'
 
                         # 存在失败文件则只释放成功文件的网盘空间
-                        delete_files(complete_file_id, each_account)
+                        status_a = delete_files(complete_file_id, each_account)
                         logging.info(f'账号{each_account}已删除{down_name}中下载成功的网盘文件')
-                        delete_trash(complete_file_id, each_account)
+                        status_b = delete_trash(complete_file_id, each_account)
                         logging.info(f'账号{each_account}已删除{down_name}中下载成功的回收站文件')
-                        print_info += f'账号{each_account}中下载成功的网盘文件已删除\n'
+                        if status_a and status_b:
+                            print_info += f'账号{each_account}中下载成功的网盘文件已删除\n'
+                        else:
+                            print_info += f'账号{each_account}中下载成功的网盘文件删除失败，请手动删除或未开启删除功能\n'
 
                         context.bot.send_message(chat_id=update.effective_chat.id, text=print_info)
                         logging.info(print_info)
@@ -622,12 +647,15 @@ def main(update: Update, context: CallbackContext, magnet):
                         logging.info(print_info)
                     else:
                         # 没有失败文件，则直接删除该文件根目录
-                        delete_files(file_id, each_account)
+                        status_a = delete_files(file_id, each_account)
                         logging.info(f'账号{each_account}已删除{down_name}网盘文件')
-                        delete_trash(file_id, each_account)
+                        status_b = delete_trash(file_id, each_account)
                         logging.info(f'账号{each_account}已删除{down_name}回收站文件')
 
-                        print_info += f'\n账号{each_account}中该文件的网盘空间已释放'
+                        if status_a and status_b:
+                            print_info += f'\n账号{each_account}中该文件的网盘空间已释放'
+                        else:
+                            print_info += f'\n账号{each_account}中该文件的网盘空间释放失败，请手动删除或未开启删除功能'
                         # 发送下载结果统计信息
                         context.bot.send_message(chat_id=update.effective_chat.id, text=print_info)
                         logging.info(print_info)
@@ -708,8 +736,8 @@ def clean(update: Update, context: CallbackContext):
                 context.bot.send_message(chat_id=update.effective_chat.id, text=f'账号{temp_account}网盘无需清空')
                 logging.info(f'账号{temp_account}网盘无需清空')
                 continue
-            delete_files(all_file_id, temp_account)
-            delete_trash(all_file_id, temp_account)
+            delete_files(all_file_id, temp_account, mode='all')
+            delete_trash(all_file_id, temp_account, mode='all')
             context.bot.send_message(chat_id=update.effective_chat.id, text=f'账号{temp_account}网盘已清空')
             logging.info(f'账号{temp_account}网盘已清空')
 
@@ -724,8 +752,8 @@ def clean(update: Update, context: CallbackContext):
                     context.bot.send_message(chat_id=update.effective_chat.id, text=f'账号{each_account}网盘无需清空')
                     logging.info(f'账号{each_account}网盘无需清空')
                     continue
-                delete_files(all_file_id, each_account)
-                delete_trash(all_file_id, each_account)
+                delete_files(all_file_id, each_account, mode='all')
+                delete_trash(all_file_id, each_account, mode='all')
                 context.bot.send_message(chat_id=update.effective_chat.id, text=f'账号{each_account}网盘已清空')
                 logging.info(f'账号{each_account}网盘已清空')
 
@@ -736,7 +764,7 @@ def clean(update: Update, context: CallbackContext):
 
 # 打印账号和是否vip
 def print_user_vip():
-    print_info = '账号                                   vip\n'
+    print_info = '账号      vip\n'
     for each_user in USER:
         flag = get_my_vip(each_user)
         if flag == 0:
@@ -747,7 +775,7 @@ def print_user_vip():
             flag = '?'
         else:
             flag = '××'  # 登陆失败，检查账号密码
-        print_info += f' `{each_user}`      {flag}   \n'
+        print_info += f' `{each_user}`\[{flag}]\n'
     return print_info.rstrip()
 
 
@@ -756,6 +784,14 @@ def print_user():
     print_info = "账号：\n"
     for each_user in USER:
         print_info += f'`{each_user}`\n'
+    return print_info.rstrip()
+
+
+# 打印账号自动删除状态
+def print_user_auto_delete():
+    print_info = "账号      自动清理\n"
+    for key, value in AUTO_DELETE.items():
+        print_info += f'`{key}`\[{value}]\n'
     return print_info.rstrip()
 
 
@@ -768,6 +804,7 @@ def record_config():
             f'ADMIN_IDS = {ADMIN_IDS}\n'
             f'USER = {USER}\n'
             f'PASSWORD = {PASSWORD}\n'
+            f'AUTO_DELETE = {AUTO_DELETE}\n'
             f'ARIA2_HTTPS = {ARIA2_HTTPS}\n'
             f'ARIA2_HOST = "{ARIA2_HOST}"\n'
             f'ARIA2_PORT = "{ARIA2_PORT}"\n'
@@ -816,21 +853,29 @@ def account_manage(update: Update, context: CallbackContext):
     if len(argv) == 0:
         context.bot.send_message(chat_id=update.effective_chat.id,
                                  text='【用法】\n'
-                                      '罗列账号：/account l/list \[vip]\n'
+                                      '罗列账号：/account l/list \[vip]\[status]\n'
                                       '添加账号：/account a/add 账号 密码\n'
                                       '删除账号：/account d/delete 账号1\n'
                                       '注册账号：/account n/new\n'
+                                      '是否开启清空网盘（默认开启）：\n'
+                                      '/account on 账号1 账号2\n'
+                                      '/account off 账号1 账号2\n'
                                       '【示例】\n'
                                       '`/account l`\n'
                                       '`/account l vip`\n'
-                                      '`/account a 123@qq.com 123`\n'
-                                      '`/account d 123@qq.com`\n'
-                                      '`/account n`',
+                                      '`/account l status`\n'
+                                      '`/account a` 123@qq.com 123\n'
+                                      '`/account d` 123@qq.com\n'
+                                      '`/account n`\n'
+                                      '`/account on` 123@qq.com\n'
+                                      '`/account off` 123@qq.com',
                                  parse_mode='Markdown')
 
     elif argv[0] in ['l', 'list']:
         if len(argv) == 2 and argv[1] == 'vip':
             context.bot.send_message(chat_id=update.effective_chat.id, text=print_user_vip(), parse_mode='Markdown')
+        elif len(argv) == 2 and argv[1] == 'status':
+            context.bot.send_message(chat_id=update.effective_chat.id, text=print_user_auto_delete(), parse_mode='Markdown')
         else:
             context.bot.send_message(chat_id=update.effective_chat.id, text=print_user(), parse_mode='Markdown')
 
@@ -879,6 +924,25 @@ def account_manage(update: Update, context: CallbackContext):
         else:
             context.bot.send_message(chat_id=update.effective_chat.id, text='参数个数错误，请检查！')
 
+    elif argv[0] in ['on', 'off']:
+        if len(argv) > 1:
+            for each_account in argv[1:]:
+                try:
+                    if each_account not in AUTO_DELETE:
+                        context.bot.send_message(chat_id=update.effective_chat.id, text=f'账号{each_account}不存在')
+                        continue
+                    if argv[0] == 'on':
+                        AUTO_DELETE[each_account] = 'True'
+                    elif argv[0] == 'off':
+                        AUTO_DELETE[each_account] = 'False'
+                except ValueError:
+                    context.bot.send_message(chat_id=update.effective_chat.id, text=f'账号{each_account}不存在')
+                    continue
+            record_config()
+            print_info = print_user_auto_delete()
+            context.bot.send_message(chat_id=update.effective_chat.id, text=print_info, parse_mode='Markdown')
+        else:
+            context.bot.send_message(chat_id=update.effective_chat.id, text='参数个数错误，请检查！')
     else:
         context.bot.send_message(chat_id=update.effective_chat.id, text='不存在的命令语法！')
 
