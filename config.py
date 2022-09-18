@@ -6,6 +6,7 @@ ADMIN_IDS = ['12345678']
 USER = ["example_user1", "example_user2"]
 # 账号对应的密码，注意与账号顺序对应！！！
 PASSWORD = ["example_password1", "example_password2"]
+AUTO_DELETE = {}
 # 以下分别为aria2 RPC的协议（http/https）、host、端口、密钥
 ARIA2_HTTPS = False
 ARIA2_HOST = "example.aria2.host"
