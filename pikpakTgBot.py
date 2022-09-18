@@ -67,16 +67,33 @@ class AdminHandler(Handler):
         update.message.reply_text('Unauthorized access')
 
     def check_update(self, update: telegram.update.Update):
-        if update.message is None or update.message.from_user.id not in ADMIN_IDS:
+        if update.message is None or str(update.message.from_user.id) not in ADMIN_IDS:
             return True
 
         return False
 
 
+def registerFuc():
+    try:
+        url = 'https://pikpak.kinh.cc/GetFreeAccount.php'
+        resp = requests.get(url)
+        account = resp.json()['Data'].split('|')[0].split(':')[1].strip()
+        password = resp.json()['Data'].split('|')[1].split(':')[1].strip()
+        if account and password:
+            return {'account': account, 'password': password}
+        else:
+            return False
+    except Exception as e:
+        logging.error(e)
+        return False
+
+
 def start(update: Update, context: CallbackContext):
     context.bot.send_message(chat_id=update.effective_chat.id,
-                             text="【命令简介】\n/p\t自动离线+aria2下载+释放网盘空间\n/account\t管理账号（发送/account查看使用帮助）"
-                                  "\n/clean\t清空账号网盘空间（请慎用！清空文件无法找回！！！）")
+                             text="【命令简介】\n"
+                                  "/p\t自动离线+aria2下载+释放网盘空间\n"
+                                  "/account\t管理账号（发送/account查看使用帮助）\n"
+                                  "/clean\t清空账号网盘空间（请慎用，清空文件无法找回！）")
 
 
 # 账号密码登录
@@ -673,8 +690,10 @@ def clean(update: Update, context: CallbackContext):
     # 清空网盘应该阻塞住进程，防止一边下一边删
     if len(argv) == 0:  # 直接/clean则显示帮助
         context.bot.send_message(chat_id=update.effective_chat.id,
-                                 text='【用法】\n`/clean all`\t清空所有账号网盘\n/clean 账号1 [账号2] [...]'
-                                      '\t清空指定账号网盘', parse_mode='Markdown')
+                                 text='【用法】\n'
+                                      '`/clean all`\t清空所有账号网盘\n'
+                                      '/clean 账号1 [账号2] [...]\t清空指定账号网盘',
+                                 parse_mode='Markdown')
 
     # 如果未完成
     elif check_download_thread_status():
@@ -745,8 +764,15 @@ def record_config():
     # 写入同目录下的config.py文件
     with open(os.path.abspath(os.path.dirname(__file__)) + '/config.py', 'w') as f:
         f.write(
-            f'TOKEN = "{TOKEN}"\nUSER = {USER}\nPASSWORD = {PASSWORD}\nARIA2_HTTPS = {ARIA2_HTTPS}\nARIA2_HOST = "{ARIA2_HOST}"\n'
-            f'ARIA2_PORT = "{ARIA2_PORT}"\nARIA2_SECRET = "{ARIA2_SECRET}"\nARIA2_DOWNLOAD_PATH = "{ARIA2_DOWNLOAD_PATH}"\n'
+            f'TOKEN = "{TOKEN}"\n'
+            f'ADMIN_IDS = {ADMIN_IDS}\n'
+            f'USER = {USER}\n'
+            f'PASSWORD = {PASSWORD}\n'
+            f'ARIA2_HTTPS = {ARIA2_HTTPS}\n'
+            f'ARIA2_HOST = "{ARIA2_HOST}"\n'
+            f'ARIA2_PORT = "{ARIA2_PORT}"\n'
+            f'ARIA2_SECRET = "{ARIA2_SECRET}"\n'
+            f'ARIA2_DOWNLOAD_PATH = "{ARIA2_DOWNLOAD_PATH}"\n'
             f'TG_API_URL = "{TG_API_URL}"')
     logging.info('已更新config.py文件')
 
@@ -785,13 +811,21 @@ def account_manage(update: Update, context: CallbackContext):
     # account a/add 账号 密码 --> 添加到USER、PASSWORD开头，pikpak_headers开头加个元素None，保存到config.py
     # account d/delete 账号 --> 删除指定USER\PASSWORD\pikpak_headers
     argv = context.args
+    # print(argv)
 
     if len(argv) == 0:
         context.bot.send_message(chat_id=update.effective_chat.id,
-                                 text='【用法】\n罗列账号：/account l/list \[vip]\n添加账号：/account a/add '
-                                      '账号 密码\n删除账号：/account d/delete 账号1 \[账号2] \[...]\n【示例】\n'
-                                      '`/account l`\n`/account l vip`\n`/account a 12345678@qq.com '
-                                      '12345678`\n`/account d 12345678@qq.com`',
+                                 text='【用法】\n'
+                                      '罗列账号：/account l/list \[vip]\n'
+                                      '添加账号：/account a/add 账号 密码\n'
+                                      '删除账号：/account d/delete 账号1\n'
+                                      '注册账号：/account n/new\n'
+                                      '【示例】\n'
+                                      '`/account l`\n'
+                                      '`/account l vip`\n'
+                                      '`/account a 123@qq.com 123`\n'
+                                      '`/account d 123@qq.com`\n'
+                                      '`/account n`',
                                  parse_mode='Markdown')
 
     elif argv[0] in ['l', 'list']:
@@ -809,6 +843,21 @@ def account_manage(update: Update, context: CallbackContext):
 
             print_info = print_user()
             context.bot.send_message(chat_id=update.effective_chat.id, text=print_info, parse_mode='Markdown')
+        else:
+            context.bot.send_message(chat_id=update.effective_chat.id, text='参数个数错误，请检查！')
+
+    elif argv[0] in ['n', 'new']:
+        if len(argv) == 1:  # 一个参数才是正确形式
+            register = registerFuc()
+            if register:
+                USER.insert(0, register['account'])
+                PASSWORD.insert(0, register['password'])
+                pikpak_headers.insert(0, None)  # 设置pikpak_headers
+                record_config()  # 记录进入config文件
+                print_info = print_user()
+                context.bot.send_message(chat_id=update.effective_chat.id, text=print_info, parse_mode='Markdown')
+            else:
+                context.bot.send_message(chat_id=update.effective_chat.id, text='注册失败，请重试！')
         else:
             context.bot.send_message(chat_id=update.effective_chat.id, text='参数个数错误，请检查！')
 
