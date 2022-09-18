@@ -649,7 +649,7 @@ def pikpak(update: Update, context: CallbackContext):
         argv = context.args  # 获取命令参数
 
     if len(argv) == 0:  # 如果仅为/pikpak命令，没有附带参数则返回帮助信息
-        context.bot.send_message(chat_id=update.effective_chat.id, text='【用法】\n/pikpak magnet1 [magnet2] [...]')
+        context.bot.send_message(chat_id=update.effective_chat.id, text='【用法】\n/p magnet1 [magnet2] [...]')
     else:
         print_info = '下载队列添加离线磁力任务：\n'  # 将要输出的信息
 
