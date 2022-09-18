@@ -639,8 +639,10 @@ def main(update: Update, context: CallbackContext, magnet):
                             logging.info(f'账号{each_account}已删除{down_name}中下载成功的回收站文件')
                         if status_a and status_b:
                             print_info += f'账号{each_account}中下载成功的网盘文件已删除\n'
+                        elif each_account in AUTO_DELETE and AUTO_DELETE[each_account] == 'False':
+                            print_info += f'账号{each_account}未开启自动删除\n'
                         else:
-                            print_info += f'账号{each_account}中下载成功的网盘文件删除失败，请手动删除或未开启删除功能\n'
+                            print_info += f'账号{each_account}中下载成功的网盘文件删除失败，请手动删除\n'
 
                         context.bot.send_message(chat_id=update.effective_chat.id, text=print_info)
                         logging.info(print_info)
@@ -661,8 +663,10 @@ def main(update: Update, context: CallbackContext, magnet):
                             logging.info(f'账号{each_account}已删除{down_name}回收站文件')
                         if status_a and status_b:
                             print_info += f'\n账号{each_account}中该文件的网盘空间已释放'
+                        elif each_account in AUTO_DELETE and AUTO_DELETE[each_account] == 'False':
+                            print_info += f'\n账号{each_account}未开启自动删除'
                         else:
-                            print_info += f'\n账号{each_account}中该文件的网盘空间释放失败，请手动删除或未开启删除功能'
+                            print_info += f'\n账号{each_account}中该文件的网盘空间释放失败，请手动删除'
                         # 发送下载结果统计信息
                         context.bot.send_message(chat_id=update.effective_chat.id, text=print_info)
                         logging.info(print_info)
