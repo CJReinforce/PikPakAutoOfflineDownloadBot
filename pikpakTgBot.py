@@ -936,7 +936,7 @@ def account_manage(update: Update, context: CallbackContext):
         if len(argv) > 1:
             for each_account in argv[1:]:
                 try:
-                    if each_account not in AUTO_DELETE:
+                    if each_account not in USER:
                         context.bot.send_message(chat_id=update.effective_chat.id, text=f'账号{each_account}不存在')
                         continue
                     if argv[0] == 'on':
