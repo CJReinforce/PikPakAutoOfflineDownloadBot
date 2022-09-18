@@ -91,13 +91,13 @@ def registerFuc():
 def auto_delete_judge(account):
     try:
         status = AUTO_DELETE[account]
-        if status.upper() == 'TRUE' or status == '1':
-            return True
+        if status.upper() == 'TRUE':
+            return 'on'
         else:
-            return False
+            return 'off'
     except Exception as e:
-        logging.error(e)
-        return False
+        logging.error(f"{e}未配置，默认开启自动删除")
+        return 'on'
 
 
 def start(update: Update, context: CallbackContext):
@@ -326,9 +326,11 @@ def get_folder_all(account):
 def delete_files(file_id, account, mode='normal'):
     # 判断是否开启自动清理
     if mode == 'normal':
-        if not auto_delete_judge(account):
+        if auto_delete_judge(account) == 'off':
             logging.info('账号{}未开启自动清理'.format(account))
             return False
+        else:
+            logging.info('账号{}开启了自动清理'.format(account))
     # 准备数据
     login_headers = get_headers(account)
     delete_files_url = f"{PIKPAK_API_URL}/drive/v1/files:batchTrash"
@@ -359,9 +361,11 @@ def delete_files(file_id, account, mode='normal'):
 def delete_trash(file_id, account, mode='normal'):
     # 判断是否开启自动清理
     if mode == 'normal':
-        if not auto_delete_judge(account):
+        if auto_delete_judge(account) == 'off':
             logging.info('账号{}未开启自动清理'.format(account))
             return False
+        else:
+            logging.info('账号{}开启了自动清理'.format(account))
     # 准备信息
     login_headers = get_headers(account)
     delete_files_url = f"{PIKPAK_API_URL}/drive/v1/files:batchDelete"
@@ -628,9 +632,11 @@ def main(update: Update, context: CallbackContext, magnet):
 
                         # 存在失败文件则只释放成功文件的网盘空间
                         status_a = delete_files(complete_file_id, each_account)
-                        logging.info(f'账号{each_account}已删除{down_name}中下载成功的网盘文件')
+                        if status_a:
+                            logging.info(f'账号{each_account}已删除{down_name}中下载成功的网盘文件')
                         status_b = delete_trash(complete_file_id, each_account)
-                        logging.info(f'账号{each_account}已删除{down_name}中下载成功的回收站文件')
+                        if status_b:
+                            logging.info(f'账号{each_account}已删除{down_name}中下载成功的回收站文件')
                         if status_a and status_b:
                             print_info += f'账号{each_account}中下载成功的网盘文件已删除\n'
                         else:
@@ -648,10 +654,11 @@ def main(update: Update, context: CallbackContext, magnet):
                     else:
                         # 没有失败文件，则直接删除该文件根目录
                         status_a = delete_files(file_id, each_account)
-                        logging.info(f'账号{each_account}已删除{down_name}网盘文件')
+                        if status_a:
+                            logging.info(f'账号{each_account}已删除{down_name}网盘文件')
                         status_b = delete_trash(file_id, each_account)
-                        logging.info(f'账号{each_account}已删除{down_name}回收站文件')
-
+                        if status_b:
+                            logging.info(f'账号{each_account}已删除{down_name}回收站文件')
                         if status_a and status_b:
                             print_info += f'\n账号{each_account}中该文件的网盘空间已释放'
                         else:
@@ -875,7 +882,8 @@ def account_manage(update: Update, context: CallbackContext):
         if len(argv) == 2 and argv[1] == 'vip':
             context.bot.send_message(chat_id=update.effective_chat.id, text=print_user_vip(), parse_mode='Markdown')
         elif len(argv) == 2 and argv[1] == 'status':
-            context.bot.send_message(chat_id=update.effective_chat.id, text=print_user_auto_delete(), parse_mode='Markdown')
+            context.bot.send_message(chat_id=update.effective_chat.id, text=print_user_auto_delete(),
+                                     parse_mode='Markdown')
         else:
             context.bot.send_message(chat_id=update.effective_chat.id, text=print_user(), parse_mode='Markdown')
 
