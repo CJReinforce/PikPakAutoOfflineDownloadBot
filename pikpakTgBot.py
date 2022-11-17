@@ -798,6 +798,14 @@ def print_user():
     return print_info.rstrip()
 
 
+# 打印账号和密码
+def print_user_pd():
+    print_info = "账号：\n"
+    for each_user, each_password in zip(USER, PASSWORD):
+        print_info += f'`{each_user}`\n`{each_password}`\n\n'
+    return print_info.rstrip()
+
+
 # 打印账号自动删除状态
 def print_user_auto_delete():
     print_info = "账号      自动清理\n"
@@ -864,7 +872,7 @@ def account_manage(update: Update, context: CallbackContext):
     if len(argv) == 0:
         context.bot.send_message(chat_id=update.effective_chat.id,
                                  text='【用法】\n'
-                                      '罗列账号：/account l/list \[vip]\[status]\n'
+                                      '罗列账号：/account l/list \[pd]\[vip]\[status]\n'
                                       '添加账号：/account a/add 账号 密码\n'
                                       '删除账号：/account d/delete 账号1\n'
                                       '注册账号：/account n/new\n'
@@ -888,6 +896,8 @@ def account_manage(update: Update, context: CallbackContext):
         elif len(argv) == 2 and argv[1] == 'status':
             context.bot.send_message(chat_id=update.effective_chat.id, text=print_user_auto_delete(),
                                      parse_mode='Markdown')
+        elif len(argv) == 2 and argv[1] == 'pd':
+            context.bot.send_message(chat_id=update.effective_chat.id, text=print_user_pd(), parse_mode='Markdown')
         else:
             context.bot.send_message(chat_id=update.effective_chat.id, text=print_user(), parse_mode='Markdown')
 
