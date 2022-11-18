@@ -1,0 +1,8 @@
+version: '3'
+services:
+  pikpakbot:
+    build: .
+    container_name: pikpakbot
+    restart: always
+    volumes:
+      - .:/code
