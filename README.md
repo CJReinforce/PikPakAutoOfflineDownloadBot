@@ -56,6 +56,24 @@ python pikpakTgBot.py
 
 这样你的机器人就上线工作啦！当然最好还是使用如`pm2`等进程守护工具在后台守护运行。
 
+# Docker Compose 部署
+
+```shell
+git clone https://github.com/huanity/PikPakAutoOfflineDownloadBot.git
+docker compose build
+docker compose up -d
+```
+
+其他参考命令：
+```shell
+# 关闭容器
+docker compose down
+# 启动容器
+docker compose up -d
+# 查看日志信息
+docker logs pikpakbot
+```
+
 # Docker部署
 
 1. 新建文件夹`pikpakTgBot`，将`pikpakTgBot.py`、`config.py`、`requirements.txt`、`__init__.py`文件下载到`pikpakTgBot`文件夹下或者直接`git 
