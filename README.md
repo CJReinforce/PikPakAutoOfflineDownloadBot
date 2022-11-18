@@ -60,6 +60,7 @@ python pikpakTgBot.py
 
 ```shell
 git clone https://github.com/huanity/PikPakAutoOfflineDownloadBot.git
+# 编辑`config.py`文件，配置信息如上所述。
 docker compose build
 docker compose up -d
 ```
