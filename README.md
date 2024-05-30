@@ -36,6 +36,7 @@ USER = ["example_user1", "example_user2"]
 # 账号对应的密码，注意与账号顺序对应！！！
 PASSWORD = ["example_password1", "example_password2"]
 # 自动删除配置，未配置默认开启自动删除，留空即可
+# AUTO_DELETE = {"example_user1": True, "example_user2": False}
 AUTO_DELETE = {}
 # 以下分别为aria2 RPC的协议（http/https）、host、端口、密钥
 ARIA2_HTTPS = False
@@ -123,13 +124,13 @@ docker run \
 
 机器人监听的命令如下：
 
-| 命令         | 含义        | 用法                                 | 备注                    |
-|------------|-----------|------------------------------------|-----------------------|
-| `/start`   | 获取帮助信息    | `/start`                           | 无                     |
-| `/help`    | 获取帮助信息    | `/help`                            | 无                     |
-| `/p`       | 一键下载磁力到本地 | `/p magnet1 [magnet2] [...]`       | 支持多个磁力链接；直接发送磁力链接也能识别 |
-| `/clean`   | 清空指定账号的网盘 | `/clean account1 [account2] [...]` | `/clean all`清空所有账号网盘  |
-| `/account` | 管理账号      | `/account l/a/d/n [parameters]`    | 向机器人发送`/account`获取详情  |
+| 命令         | 含义        | 用法                                 | 备注                                                  |
+|------------|-----------|------------------------------------|-----------------------------------------------------|
+| `/start`   | 获取帮助信息    | `/start`                           | 无                                                   |
+| `/help`    | 获取帮助信息    | `/help`                            | 无                                                   |
+| `/p`       | 一键下载磁力到本地 | `/p magnet1 [magnet2] [...]`       | 支持多个磁力链接；直接发送磁力链接也能识别；支持pikpak能够解析的普通视频链接，如Twitter等 |
+| `/clean`   | 清空指定账号的网盘 | `/clean account1 [account2] [...]` | `/clean all`清空所有账号网盘                                |
+| `/account` | 管理账号      | `/account l/a/d/n [parameters]`    | 向机器人发送`/account`获取详情                                |
 
 **`/clean`命令清空文件无法找回！请慎用！**
 
@@ -173,10 +174,11 @@ docker run \
 ## 其他
 
 - 本项目没有任何破解行为，因此如普通用户6G空间限制、每天三次离线机会等限制均存在
-- 本项目中的获取账号功能仅获取普通账号，不会获取vip账号
+- ~~本项目中的获取账号功能仅获取普通账号，不会获取vip账号~~ 获取账号功能已失效，如有需要请自行注册获取
 
 
 # 参考
 
 - [666wcy/pikpakdown](https://github.com/666wcy/pikpakdown)
 - [mumuchenchen/pikpak](https://github.com/mumuchenchen/pikpak)
+- [Quan666/PikPakAPI](https://github.com/Quan666/PikPakAPI)

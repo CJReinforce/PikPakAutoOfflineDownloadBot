@@ -115,22 +115,21 @@ def login(account):
     # 登录所需所有信息
     login_admin = account
     login_password = PASSWORD[index]
-    login_url = f"{PIKPAK_USER_URL}/v1/auth/signin?client_id=YNxT9w7GMdWvEOKa"
-    login_data = {"captcha_token": "",
-                  "client_id": "YNxT9w7GMdWvEOKa",
+    login_url = f"{PIKPAK_USER_URL}/v1/auth/token"
+    login_data = {"client_id": "YNxT9w7GMdWvEOKa",
                   "client_secret": "dbw2OtmVEeuUvIptb1Coyg",
-                  "password": login_password, "username": login_admin}
+                  "password": login_password,
+                  "username": login_admin,
+                  "grant_type": "password"}
+    login_headers = {
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
     headers = {
-        'User-Agent': 'protocolversion/200 clientid/YNxT9w7GMdWvEOKa action_type/ networktype/WIFI sessionid/ '
-                      'devicesign/div101.073163586e9858ede866bcc9171ae3dcd067a68cbbee55455ab0b6096ea846a0 sdkversion/1.0.1.101300 '
-                      'datetime/1630669401815 appname/android-com.pikcloud.pikpak session_origin/ grant_type/ clientip/ devicemodel/LG '
-                      'V30 accesstype/ clientversion/ deviceid/073163586e9858ede866bcc9171ae3dc providername/NONE refresh_token/ '
-                      'usrno/null appid/ devicename/Lge_Lg V30 cmd/login osversion/9 platformversion/10 accessmode/',
-        'Content-Type': 'application/json; charset=utf-8',
-        'Host': 'user.mypikpak.com',
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36",
+        "Content-Type": "application/json; charset=utf-8",
     }
     # 请求登录api
-    info = requests.post(url=login_url, json=login_data, headers=headers, timeout=5).json()
+    info = requests.post(url=login_url, json=login_data, headers=login_headers, timeout=5).json()
 
     # 获得调用其他api所需的headers
     headers['Authorization'] = f"Bearer {info['access_token']}"
@@ -233,7 +232,7 @@ def get_download_url(file_id, account):
     try:
         # 准备信息
         login_headers = get_headers(account)
-        download_url = f"{PIKPAK_API_URL}/drive/v1/files/{file_id}?magic=2021&thumbnail_size=SIZE_LARGE"
+        download_url = f"{PIKPAK_API_URL}/drive/v1/files/{file_id}?_magic=2021&thumbnail_size=SIZE_LARGE"
         # 发送请求
         download_info = requests.get(url=download_url, headers=login_headers, timeout=5).json()
         # logging.info('返回文件信息包括：\n' + str(download_info))
@@ -464,10 +463,12 @@ def main(update: Update, context: CallbackContext, magnet):
                                 logging.warning(print_info)
                             else:
                                 zero_process = True
-                                logging.warning(f'账号{each_account}离线{mag_url_simple}任务进度为0%，将在15s后再次查看...')
+                                logging.warning(
+                                    f'账号{each_account}离线{mag_url_simple}任务进度为0%，将在15s后再次查看...')
                                 sleep(15)
                         else:
-                            logging.info(f'账号{each_account}离线下载{mag_url_simple}还未完成，进度{each_down["progress"]}...')
+                            logging.info(
+                                f'账号{each_account}离线下载{mag_url_simple}还未完成，进度{each_down["progress"]}...')
                             sleep(5)
                         # 只要找到了就可以退出查找循环
                         break
@@ -548,7 +549,8 @@ def main(update: Update, context: CallbackContext, magnet):
                 response = requests.post(f'{SCHEMA}://{ARIA2_HOST}:{ARIA2_PORT}/jsonrpc', data=jsonreq,
                                          timeout=5).json()
                 gid[response['result']] = [down_name, file_id, down_url]
-                context.bot.send_message(chat_id=update.effective_chat.id, text=f'文件已推送aria2下载：\n{down_name}\n请耐心等待...')
+                context.bot.send_message(chat_id=update.effective_chat.id,
+                                         text=f'文件已推送aria2下载：\n{down_name}\n请耐心等待...')
                 logging.info(f'{down_name}已推送aria2下载，请耐心等待...')
 
             logging.info(f'睡眠30s，之后将开始查询{down_name}下载进度...')
@@ -602,7 +604,8 @@ def main(update: Update, context: CallbackContext, magnet):
                                         repush_flag = True
                                         break
                                     except requests.exceptions.ReadTimeout:
-                                        logging.warning(f'{retry_down_name}下载异常后重新推送第{tries + 1}(/5)次网络请求超时！将重试')
+                                        logging.warning(
+                                            f'{retry_down_name}下载异常后重新推送第{tries + 1}(/5)次网络请求超时！将重试')
                                         continue
                                     except json.JSONDecodeError:
                                         logging.warning(
@@ -621,7 +624,8 @@ def main(update: Update, context: CallbackContext, magnet):
                                 # 删除旧的gid
                                 temp_gid.pop(each_gid)
                                 # 消息提示
-                                logging.warning(f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}\t此文件已重新推送aria2下载！')
+                                logging.warning(
+                                    f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}\t此文件已重新推送aria2下载！')
                             # 其他错误信息暂未遇到，先跳过处理
                             else:
                                 print_info = f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}\t该文件下载直链如下，' \
@@ -711,7 +715,7 @@ def pikpak(update: Update, context: CallbackContext):
         print_info = '下载队列添加离线磁力任务：\n'  # 将要输出的信息
 
         for each_magnet in argv:  # 逐个判断每个参数是否为磁力链接，并提取出
-            #if each_magnet.startswith('magnet:?'):  # 只要以magnet:?开头则认为是磁力链接
+            # if each_magnet.startswith('magnet:?'):  # 只要以magnet:?开头则认为是磁力链接
             # 一个磁链一个线程，此线程负责从离线到aria2下本地全过程
             thread_list.append(threading.Thread(target=main, args=[update, context, each_magnet]))
             thread_list[-1].start()
