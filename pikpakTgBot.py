@@ -959,6 +959,16 @@ def account_manage(update: Update, context: CallbackContext):
                 USER.pop(temp_account_index)
                 PASSWORD.pop(temp_account_index)
                 pikpak_headers.pop(temp_account_index)
+
+                # 解决删除账号后，自动删除状态也要删除
+                # 先判断是否存在，存在则删除
+                if each_account in AUTO_DELETE:
+                    AUTO_DELETE.pop(each_account)
+                # 如果存在于AUTO_DELETE但是不存在于USER中，也要删除，这是历史遗留问题
+                for key in list(AUTO_DELETE.keys()):
+                    if key not in USER:
+                        AUTO_DELETE.pop(key)
+
                 record_config()
 
                 print_info = print_user()
