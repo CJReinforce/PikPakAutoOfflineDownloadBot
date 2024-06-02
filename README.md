@@ -36,7 +36,7 @@ USER = ["example_user1", "example_user2"]
 # 账号对应的密码，注意与账号顺序对应！！！
 PASSWORD = ["example_password1", "example_password2"]
 # 自动删除配置，未配置默认开启自动删除，留空即可
-# AUTO_DELETE = {"example_user1": True, "example_user2": False}
+# AUTO_DELETE = {"example_user1": "True", "example_user2": "False"}
 AUTO_DELETE = {}
 # 以下分别为aria2 RPC的协议（http/https）、host、端口、密钥
 ARIA2_HTTPS = False
