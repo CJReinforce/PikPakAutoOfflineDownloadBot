@@ -16,7 +16,7 @@
 
 # 本地部署
 
-将`pikpakTgBot.py`、`config.py`、`requirements.txt`、`__init__.py`文件下载到本地同一目录下。
+将项目文件下载到本地同一目录下。
 
 安装依赖：
 
@@ -35,7 +35,8 @@ ADMIN_IDS = ['12345678']
 USER = ["example_user1", "example_user2"]
 # 账号对应的密码，注意与账号顺序对应！！！
 PASSWORD = ["example_password1", "example_password2"]
-# 自动删除配置，未配置默认删除
+# 自动删除配置，未配置默认开启自动删除，留空即可
+# AUTO_DELETE = {"example_user1": "True", "example_user2": "False"}
 AUTO_DELETE = {}
 # 以下分别为aria2 RPC的协议（http/https）、host、端口、密钥
 ARIA2_HTTPS = False
@@ -50,7 +51,7 @@ TG_API_URL = 'https://api.telegram.org'
 
 最后：
 
-```python
+```shell
 python pikpakTgBot.py
 ```
 
@@ -59,89 +60,85 @@ python pikpakTgBot.py
 # Docker Compose 部署
 
 ```shell
-git clone https://github.com/huanity/PikPakAutoOfflineDownloadBot.git
+git clone 本项目
 # 编辑`config.py`文件，配置信息如上所述。
-docker compose build
-docker compose up -d
+# 构建镜像
+docker-compose build
+# 启动容器，后台运行
+docker-compose up -d
 ```
 
 其他参考命令：
+
 ```shell
-# 关闭容器
-docker compose down
-# 启动容器
-docker compose up -d
+# 查看容器状态
+docker-compose ps
+# 停止、启动、重启容器
+docker-compose stop | start | restart
+# 停止容器并删除容器
+docker-compose down
+# 启动容器，后台运行
+docker-compose up -d
 # 查看日志信息
 docker logs pikpakbot
 ```
 
-# Docker部署
+# Docker 部署
 
-1. 新建文件夹`pikpakTgBot`，将`pikpakTgBot.py`、`config.py`、`requirements.txt`、`__init__.py`文件下载到`pikpakTgBot`文件夹下或者直接`git 
-   clone`本项目。
-```shell
-git clone https://github.com/huanity/PikPakAutoOfflineDownloadBot.git
-```
+1. 将项目文件下载到本地或者直接`git clone`本项目。
 2. 编辑`config.py`文件，配置信息如上所述。
-3. 编写`Dockerfile`文件，内容如下：
-```dockerfile
-# syntax=docker/dockerfile:1 
-FROM python:3.9-slim-buster 
-WORKDIR /code 
-COPY ./PikPakAutoOfflineDownloadBot/requirements.txt /code/requirements.txt 
-RUN pip3 install -r requirements.txt 
-CMD [ "python3", "pikpakTgBot.py"]
-```
-4.目录结构如下：
+3. 目录结构如下：
 ```shell
-pikpakTgBot
+PikPakAutoOfflineDownloadBot
 ├── Dockerfile
-└── PikPakAutoOfflineDownloadBot
-   ├── README.md
-   ├── __init__.py
-   ├── config.py
-   ├── pikpakTgBot.py
-   └── requirements.txt
+├── README.md
+├── __init__.py
+├── config.py
+├── docker-compose.yml
+├── pikpakTgBot.py
+└── requirements.txt
+```
 
-```
-5.制作docker镜像，运行容器
+4.制作docker镜像，运行容器
+
 ```shell
-cd /root/pikpakTgBot
+cd /root/PikPakAutoOfflineDownloadBot
 ```
+
 ```shell
 docker build . --tag pikpakbot
 ```
+
 ```shell
 docker run \
   --name=pikpakbot \
   --restart=always \
-  -d -v /root/pikpakTgBot/PikPakAutoOfflineDownloadBot:/code \
+  -d \
+  -v /root/PikPakAutoOfflineDownloadBot:/code \
   pikpakbot
 ```
-6.运行文件采用挂载方式，如果需要修改配置，可以直接修改`/root/pikpakTgBot/PikPakAutoOfflineDownloadBot`下的文件，然后重启容器即可。
+
+6.运行文件采用挂载方式，如果需要修改配置，可以直接修改`/root/PikPakAutoOfflineDownloadBot`下的文件，然后重启容器即可。
 
 # 使用
 
 机器人监听的命令如下：
 
-| 命令              | 含义                 | 用法                                 | 备注                   |
-|-----------------|--------------------|------------------------------------|----------------------|
-| `/start`        | 获取帮助信息             | `/start`                           | 无                    |
-| `/help`         | 获取帮助信息             | `/help`                            | 无                    |
-| `/p`            | 一键下载磁力到本地          | `/p magnet1 [magnet2] [...]`       | 支持多个磁力或直接发送磁力链接也能识别  |
-| `/clean`        | 清空指定账号的网盘          | `/clean account1 [account2] [...]` | `/clean all`清空所有账号网盘 |
-| `/account`      | 管理账号               | `/account l/a/d/n [parameters]`    | 向机器人发送`/account`获取详情 |
-
-
+| 命令         | 含义        | 用法                                 | 备注                                                         |
+|------------|-----------|------------------------------------|------------------------------------------------------------|
+| `/start`   | 获取帮助信息    | `/start`                           | 无                                                          |
+| `/help`    | 获取帮助信息    | `/help`                            | 无                                                          |
+| `/p`       | 一键下载磁力到本地 | `/p magnet1 [magnet2] [...]`       | 支持多个磁力链接；直接发送磁力链接也能识别；支持pikpak能够解析的普通链接，如Twitter视频、ed2k链接等 |
+| `/clean`   | 清空指定账号的网盘 | `/clean account1 [account2] [...]` | `/clean all`清空所有账号网盘                                       |
+| `/account` | 管理账号      | `/account l/a/d/n [parameters]`    | 向机器人发送`/account`获取详情                                       |
 
 **`/clean`命令清空文件无法找回！请慎用！**
-
 
 部分命令使用情况如下图所示：
 
 | ![`/pikpak`命令截图](https://s3.bmp.ovh/imgs/2022/06/08/8d3fdd294c98a871.png) | ![`/pikpak`命令](https://s3.bmp.ovh/imgs/2022/06/08/7e2eec33f35d17e2.png) |
-| ------------------------------------------------------------ | ------------------------------------------------------------ |
-| ![`/pikpak`失败案例](https://s3.bmp.ovh/imgs/2022/06/08/812b258e14273fe2.png) | ![`/clean`命令](https://s3.bmp.ovh/imgs/2022/06/08/05049c4f5a73f29f.png) |
+|---------------------------------------------------------------------------|-------------------------------------------------------------------------|
+| ![`/pikpak`失败案例](https://s3.bmp.ovh/imgs/2022/06/08/812b258e14273fe2.png) | ![`/clean`命令](https://s3.bmp.ovh/imgs/2022/06/08/05049c4f5a73f29f.png)  |
 
 # 更新日志
 
@@ -158,18 +155,15 @@ docker run \
 
 </details>
 
-# Todo
 
-- 多线程下载：多账号多线程下载、vip账号多线程下载
-- docker部署
 
 # 注意事项
 
 ## 程序相关
 
-- pikpak离线下载时可能返回`xx not saved successfully!`的信息，~~暂不知悉其影响，现先忽略。如发现此信息对文件造成的影响，欢迎反馈，但是大概率是pikpak离线下载自己的问题，与本程序可能无关~~ 
+- pikpak离线下载时可能返回`xx not saved successfully!`的信息，
   原因为pikpak
-默认不离线广告文件
+  默认不离线广告文件
 - pikpak离线下载可能会长时间卡在0进度，这表明pikpak服务器没有此资源，所以下不动。此时程序会停止下载此磁链
 - 所有待下载的磁力会按顺序逐个下载，只有完成上一个磁力从离线到下载至本地再释放网盘空间的全部过程，才会继续处理下一个磁力。这是为了避免出现网盘空间不够用的情况
 - `/p`命令不会阻塞进程，意味着可以在正在下载上一个磁力的过程中，继续添加磁力，但是依然会排队等待下载
@@ -179,12 +173,12 @@ docker run \
 
 ## 其他
 
-- 本项目不存在任何破解行为，因此如普通用户6G空间限制、每天三次离线机会等限制均存在
-- 本项目中的获取账号功能仅获取普通账号，不会获取vip账号
-- pikpak新注册用户可获得一天体验vip，因此可以自行注册账号来享受一天无限制随意离线
+- 本项目没有任何破解行为，因此如普通用户6G空间限制、每天三次离线机会等限制均存在
+- 获取账号功能已失效，如有需要请自行注册获取
 
 
 # 参考
 
 - [666wcy/pikpakdown](https://github.com/666wcy/pikpakdown)
 - [mumuchenchen/pikpak](https://github.com/mumuchenchen/pikpak)
+- [Quan666/PikPakAPI](https://github.com/Quan666/PikPakAPI)

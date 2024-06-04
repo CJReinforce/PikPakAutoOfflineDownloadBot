@@ -115,22 +115,21 @@ def login(account):
     # 登录所需所有信息
     login_admin = account
     login_password = PASSWORD[index]
-    login_url = f"{PIKPAK_USER_URL}/v1/auth/signin?client_id=YNxT9w7GMdWvEOKa"
-    login_data = {"captcha_token": "",
-                  "client_id": "YNxT9w7GMdWvEOKa",
+    login_url = f"{PIKPAK_USER_URL}/v1/auth/token"
+    login_data = {"client_id": "YNxT9w7GMdWvEOKa",
                   "client_secret": "dbw2OtmVEeuUvIptb1Coyg",
-                  "password": login_password, "username": login_admin}
+                  "password": login_password,
+                  "username": login_admin,
+                  "grant_type": "password"}
+    login_headers = {
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
     headers = {
-        'User-Agent': 'protocolversion/200 clientid/YNxT9w7GMdWvEOKa action_type/ networktype/WIFI sessionid/ '
-                      'devicesign/div101.073163586e9858ede866bcc9171ae3dcd067a68cbbee55455ab0b6096ea846a0 sdkversion/1.0.1.101300 '
-                      'datetime/1630669401815 appname/android-com.pikcloud.pikpak session_origin/ grant_type/ clientip/ devicemodel/LG '
-                      'V30 accesstype/ clientversion/ deviceid/073163586e9858ede866bcc9171ae3dc providername/NONE refresh_token/ '
-                      'usrno/null appid/ devicename/Lge_Lg V30 cmd/login osversion/9 platformversion/10 accessmode/',
-        'Content-Type': 'application/json; charset=utf-8',
-        'Host': 'user.mypikpak.com',
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36",
+        "Content-Type": "application/json; charset=utf-8",
     }
     # 请求登录api
-    info = requests.post(url=login_url, json=login_data, headers=headers, timeout=5).json()
+    info = requests.post(url=login_url, json=login_data, headers=login_headers, timeout=5).json()
 
     # 获得调用其他api所需的headers
     headers['Authorization'] = f"Bearer {info['access_token']}"
@@ -154,15 +153,30 @@ def magnet_upload(file_url, account):
     # 请求离线下载所需数据
     login_headers = get_headers(account)
     torrent_url = f"{PIKPAK_API_URL}/drive/v1/files"
-    torrent_data = {
-        "kind": "drive#file",
-        "name": "",
-        "upload_type": "UPLOAD_TYPE_URL",
-        "url": {
-            "url": file_url
-        },
-        "folder_type": "DOWNLOAD"
-    }
+    # 磁力下载
+    if str(file_url).startswith("'magnet:?'"):
+        torrent_data = {
+            "kind": "drive#file",
+            "name": "",
+            "upload_type": "UPLOAD_TYPE_URL",
+            "url": {
+                "url": file_url
+            },
+            "folder_type": "DOWNLOAD"
+        }
+    # 普通下载
+    else:
+        torrent_data = {
+            "kind": "drive#file",
+            "name": "",
+            "upload_type": "UPLOAD_TYPE_URL",
+            "params": {"from": "file"},
+            "parent_id": "",
+            "url": {
+                "url": file_url
+            },
+            "folder_type": "DOWNLOAD"
+        }
     # 请求离线下载
     torrent_result = requests.post(url=torrent_url, headers=login_headers, json=torrent_data, timeout=5).json()
 
@@ -183,9 +197,9 @@ def magnet_upload(file_url, account):
     file_url_part = re.search(r'^(magnet:\?).*(xt=.+?)(&|$)', file_url)
     if file_url_part:
         file_url_simple = ''.join(file_url_part.groups()[:-1])
-        logging.info(f"账号{account}添加离线磁力任务:{file_url_simple}")
+        logging.info(f"账号{account}添加离线任务:{file_url_simple}")
     else:
-        logging.info(f"账号{account}添加离线磁力任务:{file_url}")
+        logging.info(f"账号{account}添加离线任务:{file_url}")
 
     # 返回离线任务id、下载文件名
     return torrent_result['task']['id'], torrent_result['task']['name']
@@ -218,7 +232,7 @@ def get_download_url(file_id, account):
     try:
         # 准备信息
         login_headers = get_headers(account)
-        download_url = f"{PIKPAK_API_URL}/drive/v1/files/{file_id}?magic=2021&thumbnail_size=SIZE_LARGE"
+        download_url = f"{PIKPAK_API_URL}/drive/v1/files/{file_id}?_magic=2021&thumbnail_size=SIZE_LARGE"
         # 发送请求
         download_info = requests.get(url=download_url, headers=login_headers, timeout=5).json()
         # logging.info('返回文件信息包括：\n' + str(download_info))
@@ -394,8 +408,11 @@ def delete_trash(file_id, account, mode='normal'):
 # /pikpak命令主程序
 def main(update: Update, context: CallbackContext, magnet):
     # 磁链的简化表示，不保证兼容所有磁链，仅为显示信息时比较简介，不影响任何实际功能
-    mag_url_part = re.search(r'^(magnet:\?).*(xt=.+?)(&|$)', magnet)
-    mag_url_simple = ''.join(mag_url_part.groups()[:-1])
+    if str(magnet).startswith("magnet:?"):
+        mag_url_part = re.search(r'^(magnet:\?).*(xt=.+?)(&|$)', magnet)
+        mag_url_simple = ''.join(mag_url_part.groups()[:-1])
+    else:
+        mag_url_simple = magnet
 
     try:  # 捕捉所有的请求超时异常
         for each_account in USER:
@@ -406,7 +423,7 @@ def main(update: Update, context: CallbackContext, magnet):
 
             if not mag_id:  # 如果添加离线失败，那就试试下一个账号
                 if each_account == USER[-1]:  # 最后一个账号仍然无法离线下载
-                    print_info = f'磁链{mag_url_simple}所有账号均离线下载失败！可能是所有账号免费离线次数用尽，或者文件大小超过网盘剩余容量！'
+                    print_info = f'{mag_url_simple}所有账号均离线下载失败！可能是所有账号免费离线次数用尽，或者文件大小超过网盘剩余容量！'
                     context.bot.send_message(chat_id=update.effective_chat.id, text=print_info)
                     logging.warning(print_info)
                 continue
@@ -446,10 +463,12 @@ def main(update: Update, context: CallbackContext, magnet):
                                 logging.warning(print_info)
                             else:
                                 zero_process = True
-                                logging.warning(f'账号{each_account}离线{mag_url_simple}任务进度为0%，将在15s后再次查看...')
+                                logging.warning(
+                                    f'账号{each_account}离线{mag_url_simple}任务进度为0%，将在15s后再次查看...')
                                 sleep(15)
                         else:
-                            logging.info(f'账号{each_account}离线下载{mag_url_simple}还未完成，进度{each_down["progress"]}...')
+                            logging.info(
+                                f'账号{each_account}离线下载{mag_url_simple}还未完成，进度{each_down["progress"]}...')
                             sleep(5)
                         # 只要找到了就可以退出查找循环
                         break
@@ -521,7 +540,7 @@ def main(update: Update, context: CallbackContext, magnet):
 
             # 否则是单个文件，只推送一次，不用太担心网络请求出错
             else:
-                logging.info(f'磁链{mag_url_simple}内容为单文件，将直接推送aria2下载')
+                logging.info(f'{mag_url_simple}内容为单文件，将直接推送aria2下载')
 
                 jsonreq = json.dumps({'jsonrpc': '2.0', 'id': 'qwer', 'method': 'aria2.addUri',
                                       'params': [f"token:{ARIA2_SECRET}", [down_url],
@@ -530,7 +549,8 @@ def main(update: Update, context: CallbackContext, magnet):
                 response = requests.post(f'{SCHEMA}://{ARIA2_HOST}:{ARIA2_PORT}/jsonrpc', data=jsonreq,
                                          timeout=5).json()
                 gid[response['result']] = [down_name, file_id, down_url]
-                context.bot.send_message(chat_id=update.effective_chat.id, text=f'文件已推送aria2下载：\n{down_name}\n请耐心等待...')
+                context.bot.send_message(chat_id=update.effective_chat.id,
+                                         text=f'文件已推送aria2下载：\n{down_name}\n请耐心等待...')
                 logging.info(f'{down_name}已推送aria2下载，请耐心等待...')
 
             logging.info(f'睡眠30s，之后将开始查询{down_name}下载进度...')
@@ -584,7 +604,8 @@ def main(update: Update, context: CallbackContext, magnet):
                                         repush_flag = True
                                         break
                                     except requests.exceptions.ReadTimeout:
-                                        logging.warning(f'{retry_down_name}下载异常后重新推送第{tries + 1}(/5)次网络请求超时！将重试')
+                                        logging.warning(
+                                            f'{retry_down_name}下载异常后重新推送第{tries + 1}(/5)次网络请求超时！将重试')
                                         continue
                                     except json.JSONDecodeError:
                                         logging.warning(
@@ -603,7 +624,8 @@ def main(update: Update, context: CallbackContext, magnet):
                                 # 删除旧的gid
                                 temp_gid.pop(each_gid)
                                 # 消息提示
-                                logging.warning(f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}\t此文件已重新推送aria2下载！')
+                                logging.warning(
+                                    f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}\t此文件已重新推送aria2下载！')
                             # 其他错误信息暂未遇到，先跳过处理
                             else:
                                 print_info = f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}\t该文件下载直链如下，' \
@@ -693,20 +715,18 @@ def pikpak(update: Update, context: CallbackContext):
         print_info = '下载队列添加离线磁力任务：\n'  # 将要输出的信息
 
         for each_magnet in argv:  # 逐个判断每个参数是否为磁力链接，并提取出
-            if each_magnet.startswith('magnet:?'):  # 只要以magnet:?开头则认为是磁力链接
-                # 一个磁链一个线程，此线程负责从离线到aria2下本地全过程
-                thread_list.append(threading.Thread(target=main, args=[update, context, each_magnet]))
-                thread_list[-1].start()
+            # if each_magnet.startswith('magnet:?'):  # 只要以magnet:?开头则认为是磁力链接
+            # 一个磁链一个线程，此线程负责从离线到aria2下本地全过程
+            thread_list.append(threading.Thread(target=main, args=[update, context, each_magnet]))
+            thread_list[-1].start()
 
-                # 显示信息为了简洁，仅提取磁链中xt参数部分
-                mag_url_part = re.search(r'^(magnet:\?).*(xt=.+?)(&|$)', each_magnet)
-                if mag_url_part:  # 正则匹配上，则输出信息
-                    print_info += ''.join(mag_url_part.groups()[:-1])
-                else:  # 否则输出未识别信息
-                    print_info += f'未识别链接：{each_magnet}'
-                print_info += '\n\n'
-            else:
-                print_info += f'未识别链接：{each_magnet}'
+            # 显示信息为了简洁，仅提取磁链中xt参数部分
+            mag_url_part = re.search(r'^(magnet:\?).*(xt=.+?)(&|$)', each_magnet)
+            if mag_url_part:  # 正则匹配上，则输出信息
+                print_info += ''.join(mag_url_part.groups()[:-1])
+            else:  # 否则输出未识别信息
+                print_info += each_magnet
+            print_info += '\n\n'
 
         context.bot.send_message(chat_id=update.effective_chat.id, text=print_info.rstrip())
         logging.info(print_info.rstrip())
@@ -939,6 +959,16 @@ def account_manage(update: Update, context: CallbackContext):
                 USER.pop(temp_account_index)
                 PASSWORD.pop(temp_account_index)
                 pikpak_headers.pop(temp_account_index)
+
+                # 解决删除账号后，自动删除状态也要删除
+                # 先判断是否存在，存在则删除
+                if each_account in AUTO_DELETE:
+                    AUTO_DELETE.pop(each_account)
+                # 如果存在于AUTO_DELETE但是不存在于USER中，也要删除，这是历史遗留问题
+                for key in list(AUTO_DELETE.keys()):
+                    if key not in USER:
+                        AUTO_DELETE.pop(key)
+
                 record_config()
 
                 print_info = print_user()
