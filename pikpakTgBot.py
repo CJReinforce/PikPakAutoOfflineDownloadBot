@@ -4,7 +4,8 @@ import os
 import re
 import threading
 from time import sleep, time
-
+from pikpakapi import PikPakApi
+import asyncio
 import requests
 import telegram
 from telegram import Update
@@ -35,29 +36,7 @@ else:
 
 dispatcher = updater.dispatcher
 
-
-# ptb官方提供的方法，进行权限限制
-# from functools import wraps
-#
-# LIST_OF_ADMINS = [497836069]
-
-
-# def restricted(func):
-#     @wraps(func)
-#     def wrapped(update, context, *args, **kwargs):
-#         user_id = update.effective_user.id
-#         if user_id not in LIST_OF_ADMINS:
-#             print(f"Unauthorized access denied for {user_id}.")
-#             return
-#         return func(update, context, *args, **kwargs)
-#
-#     return wrapped
-#
-#
-# @restricted
-
-
-# Stack Overflow 用户@Majid提供的方法
+# 用户限制：Stack Overflow 用户@Majid提供的方法
 # from: https://stackoverflow.com/questions/62466399/how-can-i-restrict-a-telegram-bots-use-to-some-users-only#answers-header
 class AdminHandler(Handler):
     def __init__(self):
@@ -115,25 +94,16 @@ def login(account):
     # 登录所需所有信息
     login_admin = account
     login_password = PASSWORD[index]
-    login_url = f"{PIKPAK_USER_URL}/v1/auth/token"
-    login_data = {"client_id": "YNxT9w7GMdWvEOKa",
-                  "client_secret": "dbw2OtmVEeuUvIptb1Coyg",
-                  "password": login_password,
-                  "username": login_admin,
-                  "grant_type": "password"}
-    login_headers = {
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36",
-        "Content-Type": "application/json; charset=utf-8",
-    }
-    # 请求登录api
-    info = requests.post(url=login_url, json=login_data, headers=login_headers, timeout=5).json()
 
-    # 获得调用其他api所需的headers
-    headers['Authorization'] = f"Bearer {info['access_token']}"
-    headers['Host'] = 'api-drive.mypikpak.com'
+    client = PikPakApi(
+        username=login_admin,
+        password=login_password,
+    )
+
+    # 执行异步的登录和刷新操作，并等待完成
+    asyncio.run(client.login())
+    asyncio.run(client.refresh_access_token())
+    headers = client.get_headers()
     pikpak_headers[index] = headers.copy()  # 拷贝
 
     logging.info(f"账号{account}登陆成功！")
