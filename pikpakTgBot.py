@@ -22,6 +22,7 @@ PIKPAK_USER_URL = "https://user.mypikpak.com"
 
 # 记录登陆账号的headers，调用api用
 pikpak_headers = [None] * len(USER)
+pikpak_clients = [None] * len(USER)
 # 命令运行标志，防止下载与删除命令同时运行
 running = False
 # 记录下载线程
@@ -84,7 +85,8 @@ def start(update: Update, context: CallbackContext):
                              text="【命令简介】\n"
                                   "/p\t自动离线+aria2下载+释放网盘空间\n"
                                   "/account\t管理账号（发送/account查看使用帮助）\n"
-                                  "/clean\t清空账号网盘空间（请慎用，清空文件无法找回！）")
+                                  "/clean\t清空账号网盘空间（请慎用，清空文件无法找回！）\n"
+                                  "/path\t管理pikpak离线下载的路径\n")
 
 
 # 账号密码登录
@@ -105,6 +107,7 @@ def login(account):
     asyncio.run(client.refresh_access_token())
     headers = client.get_headers()
     pikpak_headers[index] = headers.copy()  # 拷贝
+    pikpak_clients[index] = client
 
     logging.info(f"账号{account}登陆成功！")
 
@@ -118,35 +121,34 @@ def get_headers(account):
     return pikpak_headers[index]
 
 
+def get_clients(account):
+    index = USER.index(account)
+
+    if not pikpak_clients[index]:  # clients为空则先登录
+        login(account)
+    return pikpak_clients[index]
+
 # 离线下载磁力
-def magnet_upload(file_url, account):
+def magnet_upload(file_url, account, parent_id=None, offline_path=None):
     # 请求离线下载所需数据
     login_headers = get_headers(account)
+    client = get_clients(account)
     torrent_url = f"{PIKPAK_API_URL}/drive/v1/files"
+    # 获取离线下载路径id
+    if offline_path:
+        parent_ids = asyncio.run(client.path_to_id(path=offline_path, create=True))
+        if parent_ids and offline_path.split("/")[-1] == parent_ids[-1]["name"]:
+            parent_id = parent_ids[-1]["id"]
+
     # 磁力下载
-    if str(file_url).startswith("'magnet:?'"):
-        torrent_data = {
-            "kind": "drive#file",
-            "name": "",
-            "upload_type": "UPLOAD_TYPE_URL",
-            "url": {
-                "url": file_url
-            },
-            "folder_type": "DOWNLOAD"
-        }
-    # 普通下载
-    else:
-        torrent_data = {
-            "kind": "drive#file",
-            "name": "",
-            "upload_type": "UPLOAD_TYPE_URL",
-            "params": {"from": "file"},
-            "parent_id": "",
-            "url": {
-                "url": file_url
-            },
-            "folder_type": "DOWNLOAD"
-        }
+    torrent_data = {
+        "kind": "drive#file",
+        "name": "",
+        "upload_type": "UPLOAD_TYPE_URL",
+        "url": {"url": file_url},
+        "folder_type": "DOWNLOAD" if not parent_id else "",
+        "parent_id": parent_id,
+    }
     # 请求离线下载
     torrent_result = requests.post(url=torrent_url, headers=login_headers, json=torrent_data, timeout=5).json()
 
@@ -376,7 +378,7 @@ def delete_trash(file_id, account, mode='normal'):
 
 
 # /pikpak命令主程序
-def main(update: Update, context: CallbackContext, magnet):
+def main(update: Update, context: CallbackContext, magnet, offline_path=None):
     # 磁链的简化表示，不保证兼容所有磁链，仅为显示信息时比较简介，不影响任何实际功能
     if str(magnet).startswith("magnet:?"):
         mag_url_part = re.search(r'^(magnet:\?).*(xt=.+?)(&|$)', magnet)
@@ -389,7 +391,7 @@ def main(update: Update, context: CallbackContext, magnet):
             # 登录
             login(each_account)  # 指定用哪个账户登录
             # 离线下载并获取任务id和文件名
-            mag_id, mag_name = magnet_upload(magnet, each_account)
+            mag_id, mag_name = magnet_upload(magnet, each_account, offline_path=offline_path)
 
             if not mag_id:  # 如果添加离线失败，那就试试下一个账号
                 if each_account == USER[-1]:  # 最后一个账号仍然无法离线下载
@@ -683,11 +685,24 @@ def pikpak(update: Update, context: CallbackContext):
         context.bot.send_message(chat_id=update.effective_chat.id, text='【用法】\n/p magnet1 [magnet2] [...]')
     else:
         print_info = '下载队列添加离线磁力任务：\n'  # 将要输出的信息
+        if os.path.isabs(argv[0]):
+            temp_offline_path = argv[0]
+            argv = argv[1:]
+        else:
+            temp_offline_path = None
+
+        offline_path = None
+        if temp_offline_path:
+            offline_path = temp_offline_path
+        elif str(PIKPAK_OFFLINE_PATH) not in ["None", "/My Pack"]:
+            offline_path = PIKPAK_OFFLINE_PATH
+        if offline_path:
+            print_info += f'检测到自定义下载路径 {offline_path}，将离线到此路径\n'
+            logging.info(f'检测到自定义下载路径 {offline_path}，将离线到此路径')
 
         for each_magnet in argv:  # 逐个判断每个参数是否为磁力链接，并提取出
-            # if each_magnet.startswith('magnet:?'):  # 只要以magnet:?开头则认为是磁力链接
             # 一个磁链一个线程，此线程负责从离线到aria2下本地全过程
-            thread_list.append(threading.Thread(target=main, args=[update, context, each_magnet]))
+            thread_list.append(threading.Thread(target=main, args=[update, context, each_magnet, offline_path]))
             thread_list[-1].start()
 
             # 显示信息为了简洁，仅提取磁链中xt参数部分
@@ -819,7 +834,8 @@ def record_config():
             f'ARIA2_PORT = "{ARIA2_PORT}"\n'
             f'ARIA2_SECRET = "{ARIA2_SECRET}"\n'
             f'ARIA2_DOWNLOAD_PATH = "{ARIA2_DOWNLOAD_PATH}"\n'
-            f'TG_API_URL = "{TG_API_URL}"')
+            f'TG_API_URL = "{TG_API_URL}"\n'
+            f'PIKPAK_OFFLINE_PATH = "{PIKPAK_OFFLINE_PATH}"\n')
     logging.info('已更新config.py文件')
 
 
@@ -969,170 +985,58 @@ def account_manage(update: Update, context: CallbackContext):
         context.bot.send_message(chat_id=update.effective_chat.id, text='不存在的命令语法！')
 
 
-'''
-# 想弃用/download命令
-# 下载账号下所有文件
-def download_main(update: Update, context: CallbackContext, argv: list):
-    global running, account_index
-
-    if not len(argv):
-        context.bot.send_message(chat_id=update.effective_chat.id, text='【用法】\n/download 账号1 [账号2] [...]')
+def path(update: Update, context: CallbackContext):
+    """
+    设置网盘离线下载路径
+    :param update:
+    :param context:
+    :return:
+    """
+    argv = context.args  # 获取命令参数
+    global PIKPAK_OFFLINE_PATH
+    if len(argv) == 0:
+        context.bot.send_message(chat_id=update.effective_chat.id,
+                                 text='【用法】\n'
+                                      '设置离线路径：`/path 路径参数`\n'
+                                      '查询离线路径：`/path info`\n'
+                                      '恢复默认路径：`/path default`\n'
+                                      '【示例】\n'
+                                      '`/path /downloads`\n'
+                                      '路径参数请使用绝对路径，如`/downloads`',
+                                 parse_mode='Markdown')
+    elif argv[0] == 'info':
+        if PIKPAK_OFFLINE_PATH == "None":
+            context.bot.send_message(chat_id=update.effective_chat.id, text='当前离线下载路径为默认路径：`/My Pack`', parse_mode='Markdown')
+        else:
+            context.bot.send_message(chat_id=update.effective_chat.id, text=f'当前离线下载路径为：`{PIKPAK_OFFLINE_PATH}`', parse_mode='Markdown')
+    elif argv[0] == 'default':
+        PIKPAK_OFFLINE_PATH = "None"
+        record_config()
+        context.bot.send_message(chat_id=update.effective_chat.id, text='已恢复默认路径：`/My Pack`', parse_mode='Markdown')
     else:
-        for each_account in argv:
-            # 检查输入账号是否存在
-            try:
-                account_index = the_config['user'].index(each_account)
-            except ValueError:
-                context.bot.send_message(chat_id=update.effective_chat.id, text=f'账号{each_account}不存在！')
-                continue
+        # 判断路径是否为绝对路径
+        if not os.path.isabs(argv[0]):
+            context.bot.send_message(chat_id=update.effective_chat.id, text='路径参数请使用绝对路径或命令不存在！')
+            return
+        PIKPAK_OFFLINE_PATH = argv[0]
+        record_config()
+        context.bot.send_message(chat_id=update.effective_chat.id, text=f'已设置离线下载路径：`{PIKPAK_OFFLINE_PATH}`', parse_mode='Markdown')
 
-            # 捕捉请求超时异常
-            try:
-                login(account_index)  # 先登录，更新headers等信息
-                gid = {}  # 记录每个下载任务的gid
-                download_headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.9; rv:50.0) Gecko/20100101 Firefox/50.0'}  # 偶尔会出现aria2下载失败，报ssl错误，试试加上header。没用，好像是我自己aria2版本问题
-
-                # 获取所有文件的相关信息，并推送aria2开始下载
-                for name, url, down_file_id, path in get_folder_all_file(folder_id='', path=''):
-                    jsonreq = json.dumps({'jsonrpc': '2.0', 'id': 'qwer', 'method': 'aria2.addUri',
-                                          'params': [f"token:{the_config['Aria2_secret']}", [url],
-                                                     {"dir": the_config['Aria2_download_path'] + '/' + path, "out": f"{name}",
-                                                      "header": download_headers, "check-certificate": False}]})
-
-                    push_flag = False
-                    # 文件夹的推送下载是网络请求密集地之一，每个链接将尝试？次
-                    for _ in range(5):
-                        try:
-                            response = requests.post(f'{SCHEMA}://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc', data=jsonreq, timeout=5).json()
-                            push_flag = True
-                            break
-                        except requests.exceptions.ReadTimeout:
-                            continue
-                    if not push_flag:
-                        raise requests.exceptions.ReadTimeout
-
-                    gid[response['result']] = [f'{name}', down_file_id]
-                    context.bot.send_message(chat_id=update.effective_chat.id, text=f'{name}推送aria2下载')
-                    logging.info(f'{name}推送aria2下载')
-
-                # 准备查询下载进度
-                sleep(20)
-                # 查询每个gid是否完成
-                download_done = False
-                complete_file_id = []  # 记录aria2下载成功的文件id
-                failed_gid = {}  # 记录下载失败的gid
-                while not download_done:
-                    temp_gid = gid.copy()
-                    for each_gid in gid.keys():
-                        # 这里是网络请求最密集的地方之一，一次查询失败跳过即可
-                        try:
-                            jsonreq = json.dumps({'jsonrpc': '2.0', 'id': 'qwer', 'method': 'aria2.tellStatus',
-                                                  'params': [f"token:{the_config['Aria2_secret']}", each_gid,
-                                                             ["gid", "status", "errorMessage", "dir"]]})
-                            response = requests.post(f'{SCHEMA}://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc', data=jsonreq,
-                                                     timeout=5).json()
-                        except requests.exceptions.ReadTimeout:
-                            continue
-
-                        try:  # 检查任务状态
-                            status = response['result']['status']
-                            if status == 'complete':  # 完成了删除对应的gid
-                                temp_gid.pop(each_gid)
-                                complete_file_id.append(gid[each_gid][1])
-                            elif status == 'error':
-                                error_message = response["result"]["errorMessage"]
-                                # 如果是这两种错误信息，可尝试重新推送aria2下载
-                                if error_message in ['No URI available.', 'SSL/TLS handshake failure: SSL I/O error']:
-                                    # 再次推送aria2下载
-                                    retry_down_name, retry_the_url, _ = get_download_url(file_id=gid[each_gid][1])
-                                    # 这只可能是文件，不会是文件夹
-                                    jsonreq = json.dumps({'jsonrpc': '2.0', 'id': 'qwer', 'method': 'aria2.addUri',
-                                                          'params': [f"token:{the_config['Aria2_secret']}", [retry_the_url],
-                                                                     {"dir": response["result"]["dir"], "out": retry_down_name,
-                                                                      "header": download_headers, "check-certificate": False}]})
-                                    response = requests.post(f'{SCHEMA}://{the_config["Aria2_host"]}:{the_config["Aria2_port"]}/jsonrpc',
-                                                             data=jsonreq, timeout=5).json()
-                                    # 重新记录gid
-                                    temp_gid[response['result']] = [retry_down_name, gid[each_gid][1]]
-                                    # 删除旧的gid
-                                    temp_gid.pop(each_gid)
-                                    # 消息提示
-                                    # context.bot.send_message(chat_id=update.effective_chat.id,
-                                    #                          text=f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}\n此文件已重新推送aria2下载！')
-                                    logging.warning(f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}\t此文件已重新推送aria2下载！')
-                                else:
-                                    context.bot.send_message(chat_id=update.effective_chat.id,
-                                                             text=f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}')
-                                    logging.warning(f'aria2下载{gid[each_gid][0]}出错！错误信息：{error_message}')
-                                    failed_gid[each_gid] = temp_gid.pop(each_gid)
-                        except KeyError:  # 此时任务可能已被删除
-                            context.bot.send_message(chat_id=update.effective_chat.id, text=f'aria2下载{gid[each_gid][0]}任务被删除！')
-                            logging.warning(f'aria2下载{gid[each_gid][0]}任务被删除！')
-                            failed_gid[each_gid] = temp_gid.pop(each_gid)
-                    gid = temp_gid
-                    if len(gid) == 0:
-                        download_done = True
-                        print_info = f'aria2下载账号{each_account}下所有文件已完成，共{len(complete_file_id) + len(failed_gid)}个文件，其中{len(complete_file_id)}个成功，{len(failed_gid)}个失败'
-                        if failed_gid:
-                            print_info += '，下载失败文件为：\n'
-                            for values in failed_gid.values():
-                                print_info += values[0] + '\n'
-                        print_info = print_info.rstrip()
-                        context.bot.send_message(chat_id=update.effective_chat.id, text=print_info)
-                        logging.info(print_info)
-                    else:
-                        logging.info(f'aria2下载账号{each_account}下所有文件还未完成...')
-                        sleep(10)
-
-                # 完成所有的gid则删除下载成功的文件file_id，注意仅删除下载成功的文件
-                delete_files(complete_file_id)
-                logging.info(f'已删除账号{each_account}下载成功的网盘文件')
-                delete_trash(complete_file_id)
-                logging.info(f'已删除账号{each_account}下载成功的回收站文件')
-                context.bot.send_message(chat_id=update.effective_chat.id, text=f'账号{each_account}中成功下载的文件的网盘空间已释放')
-
-                # 对于失败的文件，给出解决方案
-                if failed_gid:
-                    print_info = f'对于下载失败的文件可使用命令：\n`/clean {each_account}`清空此账号下所有文件；或者：\n`/download {each_account}`重试下载此账号下所有文件'
-                    context.bot.send_message(chat_id=update.effective_chat.id, text=print_info, parse_mode='Markdown')
-                    logging.info(print_info)
-            except requests.exceptions.ReadTimeout:
-                context.bot.send_message(chat_id=update.effective_chat.id, text=f'账号{each_account}下载请求超时，请稍后重试`/download {each_account}`', parse_mode='Markdown')
-                logging.error(f'账号{each_account}下载请求超时，请稍后重试/download {each_account}')
-                continue
-
-    running = False
-
-
-def download(update: Update, context: CallbackContext):
-    # return context.bot.send_message(chat_id=update.effective_chat.id, text='/pikpak命令已足够鲁棒，因此/download命令将弃用，若/pikpak命令使用中报错，欢迎反馈bug')
-
-    global running
-    argv = context.args
-
-    if not running:
-        # 下载类操作可以开个线程防止阻塞
-        running = True
-        t1 = threading.Thread(target=download_main, name='DownloadAccountThread', args=[update, context, argv])  # 开线程跑下载，防止阻塞
-        t1.start()
-    else:
-        context.bot.send_message(chat_id=update.effective_chat.id, text='有命令正在运行，为避免冲突请稍后再试~')
-'''
 
 start_handler = CommandHandler(['start', 'help'], start)
 pikpak_handler = CommandHandler('p', pikpak)
 clean_handler = CommandHandler(['clean', 'clear'], clean)
 account_handler = CommandHandler('account', account_manage)
+path_handler = CommandHandler('path', path)
 magnet_handler = MessageHandler(Filters.regex('^magnet:\?xt=urn:btih:[0-9a-fA-F]{40,}.*$'), pikpak)
-# download_handler = CommandHandler('download', download)  # download命令在pikpak命令健壮后将弃用
 
 dispatcher.add_handler(AdminHandler())
-# dispatcher.add_handler(download_handler)
 dispatcher.add_handler(account_handler)
 dispatcher.add_handler(start_handler)
 dispatcher.add_handler(magnet_handler)
 dispatcher.add_handler(pikpak_handler)
 dispatcher.add_handler(clean_handler)
+dispatcher.add_handler(path_handler)
 
 updater.start_polling()
 updater.idle()
