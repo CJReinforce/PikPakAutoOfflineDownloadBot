@@ -2,7 +2,7 @@
 ## 2024-12-5
 - 新增功能：支持指定离线下载至PikPak某个目录
 - 发送 /path 命令获取使用帮助
-- 同时支持快速设置临时下载目录：发送 /movie magnet 就可以临时将离线下载路径修改为 /movie
+- 同时支持快速设置临时下载目录：发送/p /movie magnet 就可以临时将离线下载路径修改为 /movie
 - 本次更新请在config中建立新参数PIKPAK_OFFLINE_PATH = "None"
 
 # 功能
